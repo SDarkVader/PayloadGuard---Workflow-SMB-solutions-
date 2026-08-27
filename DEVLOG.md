@@ -4,6 +4,23 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 9 photo upload verified in production; Build 1 core loop (Steps 1–9) complete
+
+**Phase:** production verification, closing out Step 9
+
+- Deployment `dpl_Gs581xQSuvG7eMQuPow4QCDLihcS` (commit `4d1b7ae`, the Step 9 photo-upload code) confirmed `READY` via the Vercel API.
+- Submitted a real multipart request to the live endpoint (`POST /api/enquiry` on `payload-guard-workflow-smb-solution.vercel.app`) with two synthetic test JPEGs (this sandbox has no image tooling, so a minimal valid 1×1-pixel JPEG was generated via Node rather than skipped) and pseudonymized test data. Response: `200 { ok: true, photoCount: 2 }`.
+- Queried the production DB directly for the resulting row: `photo_urls` held two real `https://*.public.blob.vercel-storage.com/...` URLs, not empty — confirming the OIDC Blob path (previously only proven with a raw `put()`/`del()` call) works end-to-end through the actual application code path.
+- Both URLs independently `curl`'d: `200`, `content-type: image/jpeg`, correct byte size — confirmed publicly reachable, not just present in the DB.
+- Steven confirmed via Slack screenshot that the enquiry card posted with an inline image block in place. The block rendered as a blank/gray square — expected and correct, since the uploaded file was a synthetic 1×1-pixel placeholder, not a real photo; the mechanism (upload → URL → DB → Slack image block) is what was under test, and it's confirmed working. A real user-submitted photo will render normally.
+- Test enquiry row deleted from production DB after verification (`before: 1, after: 0`, confirmed by count). Queried the full `enquiries` table afterward — empty, so no other stray test rows (from this or earlier sessions) were left behind either. The two tiny synthetic test images remain in Blob storage (harmless, 287 bytes each, not linked from any DB row); not worth a temporary delete route for.
+
+**Verified:** the last unverified piece of Build 1's core loop — real photo upload through production, DB persistence, public reachability, and inline Slack rendering.
+
+**Result: Build 1's core loop (spec §9, Steps 1–9) is functionally complete and verified end-to-end in production.** Spec §10's full verification checklist (edge cases: broken Slack webhook, broken DB, 5th photo rejection, honeypot, mobile usability pass, etc.) has not yet been run as a formal pass — see `HANDOVER.md`.
+
+---
+
 ## 2026-08-27 — Step 9: photos, built and verified (with one real bug caught and fixed)
 
 **Phase:** 9 (photos — last piece of Build 1's core loop, per spec §9)
