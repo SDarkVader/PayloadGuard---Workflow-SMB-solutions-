@@ -2,13 +2,22 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-27 (Step 1 complete)
+**Last updated:** 2026-08-27 (Steps 1, 3, 4 complete; Step 2 pending on Steven)
 
 ## Where we are
 
-Step 1 of the build order (`docs/design/specs/build-1-enquiry-capture-pipeline.md` §9) is done and verified: empty app deployed, live HTTPS URL confirmed publicly reachable with no application logic yet.
+- Step 1 (deploy loop): done, verified.
+- Step 2 (Slack webhook proof): in progress — Steven is creating the Slack app/Incoming Webhook on his own account. Nothing in the repo depends on this yet.
+- Steps 3 (bare endpoint) and 4 (Zod validation) were built in parallel with Step 2 since neither needs any external service or credential — pure application code, verified locally before pushing.
 
 **Live production URL:** `https://payload-guard-workflow-smb-solution.vercel.app` — verified 200 OK via plain unauthenticated `curl`, serving the PayloadGuard placeholder page.
+
+**`POST /api/enquiry`** is live and validates. Verified locally (build, lint, and curl against `next start`) before pushing, then re-verified against the deployed URL:
+- Empty/invalid body → `400` with field-level errors (`name`, `phone`, `job_type`, `urgency`).
+- Bad enum values (`job_type`/`urgency`) → `400` with the specific field errors.
+- Valid payload (matches the spec's own curl example) → `200 {"ok":true}`.
+
+No DB write, no Slack post, no dedupe yet — those are Steps 5–7 and need Steven's credentials (`DATABASE_URL`, `SLACK_WEBHOOK_URL`).
 
 ## Hosting setup
 
@@ -25,11 +34,13 @@ Step 1 of the build order (`docs/design/specs/build-1-enquiry-capture-pipeline.m
 - `config/client.ts` has a real, pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types).
 - Docs: `CLAUDE.md` (rules), `README.md` (overview), `DEVLOG.md` (history), this file, and `docs/design/` (index, core principles, canonical specs, categorized addenda).
 
-## What's next — Step 2
+## What's next
 
-Prove the Slack webhook standalone (spec §9, Step 2): create the Slack app, enable Incoming Webhooks, add to a test channel, confirm with a curl POST before any application code is written. Needs Steven to create the Slack app (or grant access) since it's an external account action.
-
-Steps 3–9 (bare endpoint, validation, DB log, Slack integration, dedupe, form, photos) are not started. Each one gets its own phase and its own verification before the next starts.
+- **Step 2** (Slack webhook proof) — Steven doing this himself when at his PC. Once he has a webhook URL, Step 6 (wiring it into the app) can start.
+- **Step 5** (DB log) — needs `DATABASE_URL` (Postgres). Not started; needs Steven to provision it.
+- **Step 6** (Slack integration in-app) — needs Step 2's webhook URL.
+- **Step 7** (dedupe) — depends on Step 5 existing (the lookup needs the DB).
+- **Step 8** (build the form) and **Step 9** (photos) — deliberately last per the spec's own reasoning: the endpoint is proven first so a front-end failure is unambiguous.
 
 ## Open questions (not blockers, tracked from the spec §12)
 

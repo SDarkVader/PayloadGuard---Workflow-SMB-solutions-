@@ -4,6 +4,22 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Steps 3 & 4: bare endpoint + validation
+
+**Phase:** 3–4 (built in parallel with Step 2, which Steven is doing on his own account)
+
+- Steven asked what could be built ahead of connecting external services. Steps 3 (bare `POST /api/enquiry` returning `{"ok": true}`) and 4 (Zod validation) need zero external credentials, so built both now rather than block on Slack setup. Explicitly did not touch Steps 5/6 (DB, Slack) or Step 8 (form) — those need Steven's setup or come later in the sequence by design.
+- `app/api/enquiry/route.ts` created for real (the Phase 0 stub attempt had been reverted because Next.js requires route files to be valid modules).
+- `lib/schema.ts`: Zod schema for the enquiry input, enum values for `job_type`/`urgency` derived directly from `config/client.ts` rather than duplicated, so the two can't drift.
+- Verified locally before any push: `npm run build`, `npm run lint`, then `npm run start` + curl against `localhost:3000` for three cases — empty body, invalid enum values, and the spec's own valid-payload example. All three matched expected status/body.
+- No DB write, Slack post, or dedupe yet. No env vars touched.
+
+**Verified:** locally (build/lint/curl) before push; will re-verify against the live URL after deploy.
+
+**Not done:** Step 2 (Steven, in progress), Steps 5–9.
+
+---
+
 ## 2026-08-27 — Step 1: live deploy verified
 
 **Phase:** 1 (deploy loop, per spec §9)
