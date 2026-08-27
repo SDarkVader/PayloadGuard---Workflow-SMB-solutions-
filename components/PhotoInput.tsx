@@ -65,16 +65,30 @@ export default function PhotoInput({ photos, onChange }: PhotoInputProps) {
     onChange(photos.filter((_, i) => i !== index));
   }
 
+  const disabled = photos.length >= MAX_PHOTOS || compressing;
+
   return (
     <div className="field">
-      <label htmlFor="photos">Photos (optional, up to {MAX_PHOTOS})</label>
+      <label
+        htmlFor="photos"
+        className={`photo-upload-button${disabled ? " is-disabled" : ""}`}
+      >
+        <span className="photo-upload-icon" aria-hidden="true">
+          📷
+        </span>
+        <span className="photo-upload-text">
+          {compressing ? "Compressing…" : "Add photos"}
+          <span className="photo-upload-hint">optional, up to {MAX_PHOTOS}</span>
+        </span>
+      </label>
       <input
         ref={inputRef}
         type="file"
         id="photos"
+        className="visually-hidden-input"
         accept="image/*"
         multiple
-        disabled={photos.length >= MAX_PHOTOS || compressing}
+        disabled={disabled}
         onChange={(event) => handleFiles(event.target.files)}
       />
       {compressing && <p className="photo-status">Compressing photos…</p>}

@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-27 (Step 9 verified end-to-end in production — Build 1's core loop, Steps 1–9, is functionally complete)
+**Last updated:** 2026-08-27 (Build 1's core loop, Steps 1–9, functionally complete and verified; form given a visual styling pass)
 
 ## Where we are
 
@@ -27,10 +27,10 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 ## What exists
 
-- `app/page.tsx` — renders the real `EnquiryForm`.
+- `app/page.tsx` — gradient hero header (headline + "45-minute callback, with text updates" badge) above the real `EnquiryForm`.
 - `components/EnquiryForm.tsx` — full form incl. `PhotoInput`, submits `FormData` (not JSON).
-- `components/PhotoInput.tsx` — file input, client-side compression (canvas, 1600px/quality 0.8), max 4, preview + remove.
-- `app/globals.css` — plain functional styling throughout, including the new photo list. Deliberately unstyled beyond the spec's non-negotiables — Steven's call, revisit design later.
+- `components/PhotoInput.tsx` — big dashed-border "Add photos" button (hidden native input under a styled label), client-side compression (canvas, 1600px/quality 0.8), max 4, preview + remove.
+- `app/globals.css` — styled pass: color palette (blue/orange), gradient hero banner, rounded card with colored top accent, colored focus states, urgency options highlight when selected. Purely visual — no behavior changed.
 - `app/api/enquiry/route.ts` — honeypot → Zod validation → photo count/size validation → dedupe lookup → photo upload (per-file try/catch, never fails the enquiry) → Postgres insert → Slack post (with image blocks) → returns id + photoCount.
 - `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — all wired in.
 - `db/schema.sql` — `enquiries` table incl. `dedupe_hash`.

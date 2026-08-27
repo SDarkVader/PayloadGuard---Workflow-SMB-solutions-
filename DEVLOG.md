@@ -4,6 +4,19 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Visual styling pass (colour, hero banner, big photo-upload button)
+
+**Phase:** post-Step-9 polish, no build-order step — Steven's explicit call from the start ("we can change general layout and design as we go, functionality is the objective")
+
+- `app/globals.css`: added a real palette (blue primary, orange accent), rounded/colored form card with a top accent border, colored focus rings, rounded inputs, and a highlight state on the selected urgency option (`:has()`, safe to rely on at this point in evergreen-browser support).
+- `components/PhotoInput.tsx`: replaced the bare `<input type="file">` with a big dashed-border button (a styled `<label>` wrapping a visually-hidden native input, same `id`/`onChange`/`disabled` logic — no functional change, confirmed by keeping `handleFiles` untouched).
+- `app/page.tsx`: new copy — "Automated Roofing Enquiry" headline and a "45-minute callback, with text updates" badge — plus a gradient hero banner so the page doesn't read as a plain white form; the form card itself also picked up a colored top border for the same reason.
+- Verified via `npm run build` (clean) and Playwright screenshots at the 390px mobile viewport: base state, urgency-option selected (highlight renders), and a photo added (styled list + remove button renders). No JSON/API contract touched — `route.ts`, `lib/*`, and `EnquiryForm.tsx`'s submit logic are unchanged.
+
+**Verified:** build clean, visual states correct in a real browser (not just code review), no behavior/contract changes.
+
+---
+
 ## 2026-08-27 — Step 9 photo upload verified in production; Build 1 core loop (Steps 1–9) complete
 
 **Phase:** production verification, closing out Step 9
