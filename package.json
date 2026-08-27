@@ -14,7 +14,8 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "zod": "3.24.1",
-    "@neondatabase/serverless": "0.10.4"
+    "@neondatabase/serverless": "0.10.4",
+    "@vercel/blob": "2.8.0"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
