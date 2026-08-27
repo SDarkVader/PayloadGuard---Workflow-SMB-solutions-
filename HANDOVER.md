@@ -26,7 +26,8 @@ No DB write, no Slack post, no dedupe yet.
 - **Deployment protection:** Vercel SSO auth enabled (`all_except_custom_domains`) — per-deployment preview URLs need Vercel login; the stable production alias is public regardless. No action needed.
 - **GitHub repo is private** (Steven changed this; verified both this session's git access and Vercel's build access survived the switch).
 - **Slack:** Incoming Webhook live, tested. `SLACK_WEBHOOK_URL` set as a Vercel **Shared** (team-level) environment variable by Steven and confirmed reaching production (proved via a temporary diagnostic route, removed immediately after — see DEVLOG). Also in local `.env.local` (gitignored) for this session's testing.
-- `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`: not set up yet.
+- **Postgres:** provisioned via Vercel Storage (Neon-backed marketplace integration) and connected to the project. `DATABASE_URL` confirmed reaching production (same diagnostic-route pattern as Slack — proved presence of the full var suite, then removed the route). Still need the real connection string value locally to build/test `lib/db.ts` before wiring it in.
+- `BLOB_READ_WRITE_TOKEN`: not set up yet (Step 9).
 
 ## What exists
 
@@ -41,7 +42,7 @@ No DB write, no Slack post, no dedupe yet.
 
 ## What's next — Step 5
 
-Provision Postgres, create the enquiry table, insert on every valid request, confirm a DB failure returns `500`. Needs Steven to provision Postgres (Vercel Postgres free tier per the spec) and provide `DATABASE_URL`. Once that lands, Step 6 (wiring `lib/slack.ts` into the endpoint, after the log write) follows immediately — the module's already built and proven.
+Postgres is provisioned and `DATABASE_URL` confirmed reaching production. Waiting on the actual connection string value locally (gitignored `.env.local`, same as Slack) to build and test `lib/db.ts` — create the enquiry table, insert on every valid request, confirm a DB failure returns `500`. Once that lands, Step 6 (wiring `lib/slack.ts` into the endpoint, after the log write) follows immediately — the module's already built and proven.
 
 Step 7 (dedupe) needs Step 5's DB to exist. Steps 8–9 (form, photos) come last by design.
 

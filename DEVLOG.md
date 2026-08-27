@@ -4,6 +4,22 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Postgres provisioned; DATABASE_URL confirmed reaching production
+
+**Phase:** infra verification, no build-order step
+
+- Steven provisioned Postgres via Vercel's Storage tab (Neon-backed marketplace integration — Vercel's native Postgres product is now a Neon integration, confirmed via Vercel docs search rather than assumed) and connected it to the project.
+- Same pattern as the Slack env var check: rather than assume the connection worked or guess the variable name, deployed a temporary diagnostic route checking presence (never values) of every plausible name Neon's integration might use.
+- Result: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `POSTGRES_URL`, `POSTGRES_URL_NON_POOLING`, `POSTGRES_PRISMA_URL`, `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DATABASE` all present. `DATABASE_URL` — the exact name the spec calls for — is confirmed, so `lib/db.ts` needs no naming workaround.
+- Removed the diagnostic route immediately, redeployed, confirmed both that the debug route now 404s and `/api/enquiry` still returns 200 for a valid payload.
+- Still need the actual `DATABASE_URL` connection string value in local `.env.local` to build/test `lib/db.ts` before it's wired in — asked Steven to pull it from the Storage tab's quickstart snippet.
+
+**Verified:** `DATABASE_URL` reachable in production. Diagnostic route fully removed.
+
+**Not done:** `lib/db.ts` itself (Step 5) — next up once the local connection string is in hand for testing.
+
+---
+
 ## 2026-08-27 — SLACK_WEBHOOK_URL confirmed reaching production
 
 **Phase:** infra verification, no build-order step
