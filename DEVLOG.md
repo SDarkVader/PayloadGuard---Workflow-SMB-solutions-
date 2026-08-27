@@ -4,6 +4,25 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 5: DB log wired in and verified end-to-end
+
+**Phase:** 5 (Postgres log, per spec §9)
+
+- Got the real `DATABASE_URL` connection string from Steven, saved to local `.env.local`.
+- First attempt used `pg` (node-postgres) against the pooled connection string. Hung indefinitely rather than erroring — checked rather than assumed: tested raw TCP to the Neon host on port 5432 directly (`/dev/tcp/...`), confirmed connection failed. This sandbox's outbound network only routes proxied HTTPS; there is no path to arbitrary TCP ports including Postgres's 5432.
+- Switched to `@neondatabase/serverless`, Neon's HTTP-based driver (queries over HTTPS instead of raw TCP). This isn't just a sandbox workaround — it's also Neon/Vercel's own recommended driver for serverless functions generally, since it sidesteps connection-pool exhaustion under concurrent invocations. Swapped `pg`/`@types/pg` out for it in package.json.
+- `db/schema.sql`: `enquiries` table per the spec's data schema (§3). `id` is generated in application code via `crypto.randomUUID()` rather than a Postgres extension (`gen_random_uuid()` needs `pgcrypto` on older PG versions) — simpler, no extension dependency, still satisfies "generated server-side."
+- `lib/db.ts`: `insertEnquiry()` using the Neon HTTP driver, parameterized query, returns `{ id, createdAt }`.
+- Proved standalone first (same pattern as Slack): temporary script ran the schema migration, inserted a test row, queried it back to confirm the exact fields landed correctly, deleted it. Table confirmed created and working before touching the endpoint.
+- Wired into `app/api/enquiry/route.ts`: after Zod validation passes, inserts the record (`source: "web_form"`); success now returns `{ ok: true, id }` (the endpoint finally has a real id, not just a stub `ok: true`); DB failure is caught and returns `500` without leaking internals.
+- Verified all three of the spec's checklist cases locally against `next start`, hitting the real database: valid payload → `200` with id, confirmed the row actually exists in Postgres with correct fields via a separate query (not just trusting the response), then deleted the test row; invalid payload → still `400`, confirmed no DB hit; DB failure (deliberately broken `DATABASE_URL`) → `500`, no crash, no leaked error detail.
+
+**Verified:** locally against the real production database (Neon has one database, no separate per-environment split at this stage) — write, read-back, and failure path all confirmed before pushing.
+
+**Not done:** Step 6 (Slack wiring — `lib/slack.ts` already built, needs plugging in after the DB insert), Step 7 (dedupe), Steps 8–9 (form, photos).
+
+---
+
 ## 2026-08-27 — Postgres provisioned; DATABASE_URL confirmed reaching production
 
 **Phase:** infra verification, no build-order step
