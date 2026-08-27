@@ -4,6 +4,23 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Vercel Blob provisioned; confirmed working via OIDC, not a static token
+
+**Phase:** infra verification, no build-order step
+
+- Steven created a Blob store (`payloadguard-photos`, LHR1, Public access — required for Slack's inline image rendering, which fetches URLs directly with no auth) and connected it to the project.
+- First check: `BLOB_READ_WRITE_TOKEN` absent. Redeployed (env vars only apply to builds started after they're set) — still absent. Confirmed in the dashboard that the store genuinely showed as "Connected" to the project, so the connection itself wasn't the problem.
+- Widened the diagnostic to list all env var names matching `/blob|token/i` rather than keep guessing single names: found `BLOB_STORE_ID` and `BLOB_WEBHOOK_PUBLIC_KEY` present, `BLOB_READ_WRITE_TOKEN` genuinely never provided. This is Vercel's newer OIDC-based Blob connection — the SDK exchanges a store ID + OIDC token for a short-lived credential internally, rather than using a long-lived static token. Confirmed by testing the actual thing that matters — `put()`/`del()` — directly, rather than continuing to hunt for an env var this connection type doesn't use: real write + delete succeeded with zero explicit configuration.
+- Consequence for `lib/blob.ts` (Step 9, not yet built): call `@vercel/blob`'s `put()`/`del()` with no explicit token argument — the SDK handles the OIDC exchange automatically via `BLOB_STORE_ID`. Don't add code that checks for or requires `BLOB_READ_WRITE_TOKEN`.
+- Bumped `@vercel/blob` from an arbitrarily-pinned `0.27.1` to `2.8.0` — the old version pulled in a vulnerable `undici`; `npm audit` clean after the bump, `put()`/`del()` API unchanged for our usage.
+- Diagnostic route removed after confirming; production `/api/enquiry` unaffected throughout (not re-verified this entry since no app code changed, only the diagnostic).
+
+**Verified:** real Blob write/read/delete succeeded in production via the OIDC connection, no static token anywhere.
+
+**Not done:** `lib/blob.ts` and the rest of Step 9 (client-side compression, wiring into the form and endpoint, inline Slack rendering).
+
+---
+
 ## 2026-08-27 — Step 8: the enquiry form, built and verified in a real browser
 
 **Phase:** 8 (front-end, per spec §9 — "only now")

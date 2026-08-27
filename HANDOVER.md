@@ -31,7 +31,7 @@ No photo upload yet — that's Step 9, the last piece of Build 1's core loop.
 - Vercel project: `payload-guard-workflow-smb-solutions`, team `stevenallandark-2930's projects` (Hobby plan), linked to GitHub `SDarkVader/PayloadGuard---Workflow-SMB-solutions-` (private), production branch `main`, auto-deploys on push.
 - **Slack:** Incoming Webhook live, wired into the app, rendering correctly.
 - **Postgres:** Neon-backed via Vercel Storage, `DATABASE_URL` live, driver is `@neondatabase/serverless` (HTTP-based — don't switch to `pg`, this sandbox has no route to raw TCP 5432 and it's the recommended driver for serverless anyway).
-- `BLOB_READ_WRITE_TOKEN`: not set up yet (Step 9) — this is the one remaining piece of external setup for Build 1's core loop.
+- **Blob:** provisioned (`payloadguard-photos`, LHR1, Public access) and connected. Uses Vercel's newer OIDC-based connection — no `BLOB_READ_WRITE_TOKEN` env var exists or is needed; `@vercel/blob`'s `put()`/`del()` handle the token exchange internally via `BLOB_STORE_ID`. Confirmed with a real write+delete in production. `lib/blob.ts` should call `put()`/`del()` with no explicit token argument — don't add code expecting `BLOB_READ_WRITE_TOKEN` to exist.
 
 ## What exists
 
@@ -47,7 +47,7 @@ No photo upload yet — that's Step 9, the last piece of Build 1's core loop.
 
 ## What's next — Step 9
 
-Photos: `<input type="file" accept="image/*" multiple>` in `PhotoInput.tsx`, client-side compression (resize to ~1600px longest edge, JPEG ~0.8 quality) before upload, max 4, upload to Vercel Blob, URLs attached to the enquiry record, rendered inline as image blocks in the Slack message, success state extended to include photo count. Needs `BLOB_READ_WRITE_TOKEN` — Steven will need to provision Vercel Blob storage (same pattern as Postgres: Storage tab, connect to project) and we verify the env var reaches production the same way as before.
+Photos: `<input type="file" accept="image/*" multiple>` in `PhotoInput.tsx`, client-side compression (resize to ~1600px longest edge, JPEG ~0.8 quality) before upload, max 4, upload to Vercel Blob via `lib/blob.ts` (`put()`/`del()`, no explicit token needed — see above), URLs attached to the enquiry record, rendered inline as image blocks in the Slack message, success state extended to include photo count. Blob storage is already provisioned and confirmed working — no external setup left, this is purely a build step now.
 
 This is the last step of Build 1's core loop per the spec's build order. After Step 9, the spec's verification checklist (§10) should be run in full before considering Build 1 done.
 
