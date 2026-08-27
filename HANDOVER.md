@@ -25,7 +25,7 @@ No DB write, no Slack post, no dedupe yet.
 - Vercel project: `payload-guard-workflow-smb-solutions` (id `prj_elJEQpC8KCD9BFprF5mWeCoHfoLH`), team `stevenallandark-2930's projects` (Hobby plan), linked to GitHub `SDarkVader/PayloadGuard---Workflow-SMB-solutions-`, production branch `main`. Auto-deploys on every push to `main`.
 - **Deployment protection:** Vercel SSO auth enabled (`all_except_custom_domains`) — per-deployment preview URLs need Vercel login; the stable production alias is public regardless. No action needed.
 - **GitHub repo is private** (Steven changed this; verified both this session's git access and Vercel's build access survived the switch).
-- **Slack:** Incoming Webhook live, tested. `SLACK_WEBHOOK_URL` is in local `.env.local` (gitignored) for this session's testing. **Still needs to be added in the Vercel dashboard** (Settings → Environment Variables) for production — no tool in this environment (Vercel MCP toolset checked, `vercel` CLI not installed/authenticated) can set Vercel env vars, so this is on Steven.
+- **Slack:** Incoming Webhook live, tested. `SLACK_WEBHOOK_URL` set as a Vercel **Shared** (team-level) environment variable by Steven and confirmed reaching production (proved via a temporary diagnostic route, removed immediately after — see DEVLOG). Also in local `.env.local` (gitignored) for this session's testing.
 - `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`: not set up yet.
 
 ## What exists

@@ -4,6 +4,22 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — SLACK_WEBHOOK_URL confirmed reaching production
+
+**Phase:** infra verification, no build-order step
+
+- Steven added `SLACK_WEBHOOK_URL` as a Vercel **Shared** (team-level) environment variable rather than a per-project one, then reported the standard per-project env var fields greyed out on mobile.
+- Rather than guess whether the Shared variable actually applies to this project, deployed a temporary diagnostic route (`app/api/debug-env-check/route.ts`, boolean presence check only, never the value) to prove it directly.
+- First attempt used a leading underscore (`_env-check`) — Next.js treats underscore-prefixed segments as private/unrouted folders, so the route silently never registered. Caught by checking the build output's route table rather than assuming the file existed meant it worked; renamed to `debug-env-check` and it appeared correctly.
+- Deployed, curled `https://payload-guard-workflow-smb-solution.vercel.app/api/debug-env-check` → `{"slackWebhookConfigured":true}`. Confirmed: the Shared variable does reach this project's production runtime. The greyed-out UI Steven saw isn't blocking anything.
+- Removed the diagnostic route immediately, redeployed, confirmed both that debug-env-check now 404s and that `/api/enquiry` still works correctly.
+
+**Verified:** `SLACK_WEBHOOK_URL` reachable in production. Diagnostic route fully removed, confirmed via live 404 + `/api/enquiry` still returning 200 for a valid payload.
+
+**Not done:** still waiting on `DATABASE_URL` for Step 5.
+
+---
+
 ## 2026-08-27 — Step 2 confirmed; lib/slack.ts built and proven standalone
 
 **Phase:** 2 done; Slack module built ahead of Step 6 wiring (held back deliberately)
