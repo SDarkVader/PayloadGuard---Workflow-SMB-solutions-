@@ -2,55 +2,48 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-27 (Steps 1–5 complete and verified; Step 6 next, module already built)
+**Last updated:** 2026-08-27 (Steps 1–6 complete and verified; Step 7 next)
 
 ## Where we are
 
-- Step 1 (deploy loop): done, verified.
-- Step 2 (Slack webhook proof): done. Steven confirmed "pipeline test" landed in the test channel.
-- Steps 3–4 (bare endpoint + Zod validation): done, live.
-- **Step 5 (DB log): done.** `POST /api/enquiry` now writes to Postgres on every valid request and returns the real enquiry id. Verified against the actual database, not just locally trusted: valid payload writes a row (confirmed present with a separate read query), invalid payload never touches the DB, and a deliberately broken connection returns `500` with no leaked internals.
-- `lib/slack.ts` is written and proven standalone, **not yet wired in** — that's Step 6, next up. It just needs to post after the DB insert that now exists.
+- Step 1 (deploy loop): done.
+- Step 2 (Slack webhook proof): done.
+- Steps 3–4 (bare endpoint + Zod validation): done.
+- Step 5 (DB log): done, verified against the real database.
+- **Step 6 (Slack notification): done.** `POST /api/enquiry` now validates → writes to Postgres → posts to Slack, in that order. Verified end-to-end: real webhook + real DB together (Slack message confirmed landing correctly by Steven, screenshot matched the DB row's id exactly), and the critical failure case (broken webhook still returns 200, DB write still happens, failure logged server-side not thrown).
 
 **Live production URL:** `https://payload-guard-workflow-smb-solution.vercel.app`
 
-**`POST /api/enquiry`** — validates, writes to Postgres, returns the real id:
+**`POST /api/enquiry`** — full core pipeline working:
 - Empty/invalid body → `400` with field-level errors.
-- Bad enum values → `400` with specific field errors.
-- Valid payload → `200 { ok: true, id: "<uuid>" }`.
+- Valid payload → validates, writes to Postgres, posts to Slack, returns `200 { ok: true, id }`.
 - DB failure → `500`.
+- Slack failure → still `200` (record already saved); logged server-side for now, no replay queue yet.
 
-No Slack post, no dedupe, no photos yet.
+No dedupe, no honeypot, no form, no photos yet.
 
 ## Hosting & external services
 
-- Vercel project: `payload-guard-workflow-smb-solutions` (id `prj_elJEQpC8KCD9BFprF5mWeCoHfoLH`), team `stevenallandark-2930's projects` (Hobby plan), linked to GitHub `SDarkVader/PayloadGuard---Workflow-SMB-solutions-`, production branch `main`. Auto-deploys on every push.
-- **Deployment protection:** Vercel SSO gates per-deployment preview URLs; the stable production alias is public. No action needed.
-- **GitHub repo is private.**
-- **Slack:** Incoming Webhook live and tested. `SLACK_WEBHOOK_URL` is a Vercel Shared env var, confirmed reaching production. Also in local `.env.local` (gitignored).
-- **Postgres:** Neon-backed, via Vercel Storage. `DATABASE_URL` confirmed reaching production and confirmed working end-to-end locally against the real database. Also in local `.env.local` (gitignored).
-  - Driver is `@neondatabase/serverless` (HTTP-based), not `pg`/node-postgres — this session's sandbox has no route to raw TCP port 5432 (proxied HTTPS only), and switching to the HTTP driver fixed it. This is also Neon/Vercel's own recommended driver for serverless functions generally (avoids connection-pool exhaustion), so it's not a compromise — keep using it going forward, don't switch back to `pg`.
-  - Schema lives at `db/schema.sql`, applied via `CREATE TABLE IF NOT EXISTS` (no migration framework yet — fine for this stage, revisit if the schema needs to evolve non-trivially).
+- Vercel project: `payload-guard-workflow-smb-solutions`, team `stevenallandark-2930's projects` (Hobby plan), linked to GitHub `SDarkVader/PayloadGuard---Workflow-SMB-solutions-` (private), production branch `main`, auto-deploys on push.
+- **Slack:** Incoming Webhook live, wired into the app, confirmed rendering correctly (header includes urgency/job type/postcode, tap-to-call phone, footer with id/timestamp — per spec §5).
+- **Postgres:** Neon-backed via Vercel Storage, `DATABASE_URL` live, driver is `@neondatabase/serverless` (HTTP-based — this sandbox has no route to raw TCP 5432, and it's also Neon/Vercel's recommended driver for serverless functions generally; don't switch to `pg`).
 - `BLOB_READ_WRITE_TOKEN`: not set up yet (Step 9).
 
 ## What exists
 
-- Next.js 15.5.24 + TypeScript + App Router. Dependencies clean (`npm audit`: 0 vulnerabilities).
-- `app/api/enquiry/route.ts` — validates (Zod) then writes to Postgres; returns id or 500.
-- `lib/schema.ts` — Zod schema, enums sourced from `config/client.ts`.
+- `app/api/enquiry/route.ts` — validates (Zod) → inserts to Postgres → posts to Slack (failure logged, never surfaced) → returns id.
+- `lib/schema.ts` — Zod schema, enums from `config/client.ts`.
 - `lib/db.ts` — `insertEnquiry()` via `@neondatabase/serverless`.
-- `db/schema.sql` — `enquiries` table definition.
-- `lib/slack.ts` — message formatting + webhook post, proven standalone, not wired in.
+- `db/schema.sql` — `enquiries` table.
+- `lib/slack.ts` — message formatting + webhook post, wired in.
 - `lib/dedupe.ts`, `lib/blob.ts` — still one-line stubs (Steps 7, 9).
 - `components/EnquiryForm.tsx`, `components/PhotoInput.tsx` — still one-line stubs (Steps 8, 9).
 - `config/client.ts` — pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types).
-- Docs: `CLAUDE.md`, `README.md`, `DEVLOG.md`, this file, `docs/design/` (index, core principles, canonical specs, categorized addenda).
+- Docs: `CLAUDE.md`, `README.md`, `DEVLOG.md`, this file, `docs/design/`.
 
-## What's next — Step 6
+## What's next — Step 7
 
-Wire `lib/slack.ts`'s `postToSlack()` into `app/api/enquiry/route.ts`, called after the DB insert succeeds. Per the spec: a Slack failure must never surface to the caller — still return `200` with the id even if `postToSlack()` returns `{ ok: false }`; log the failure for replay rather than throwing. The module is already built and tested against the real webhook, so this should be fast. Needs no new external setup — both `SLACK_WEBHOOK_URL` and `DATABASE_URL` are already confirmed live.
-
-Step 7 (dedupe) follows — the DB now exists so the lookup is unblocked. Steps 8–9 (form, photos) come last by design.
+Dedupe: hash of `phone + message + truncate(now, 'hour')`; if a matching hash exists, return `200` with the existing enquiry id instead of inserting a new row. Needs no new external setup — DB already exists. After that, honeypot handling and Step 8 (the actual form) — the endpoint has now been proven through the full pipeline, so any front-end failure from here is unambiguous.
 
 ## Open questions (not blockers, tracked from the spec §12)
 
@@ -61,8 +54,8 @@ Step 7 (dedupe) follows — the DB now exists so the lookup is unblocked. Steps 
 ## Decisions made so far
 
 - Push directly to `main`, no feature-branch hoarding.
-- PII pseudonymization: `CLIENT_ALPHA` / `CLIENT_ALPHA_CONTACT`, real mapping kept outside this repo. Region and trade are real (Aberdeen, roofing — confirmed first target market).
+- PII pseudonymization: `CLIENT_ALPHA` / `CLIENT_ALPHA_CONTACT`, real mapping kept outside this repo. Region and trade are real (Aberdeen, roofing).
 - Work proceeds in phases matching the spec's build order; each phase verified before the next starts.
-- Hosting: Vercel (Hobby plan for now — non-commercial license note from the spec still applies at go-live).
+- Hosting: Vercel (Hobby plan for now — non-commercial license note applies at go-live).
 - GitHub repo: private.
-- DB driver: `@neondatabase/serverless` (HTTP-based), not `pg` — see Hosting section above for why.
+- DB driver: `@neondatabase/serverless`, not `pg`.

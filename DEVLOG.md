@@ -4,6 +4,21 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 6: Slack wired in, full pipeline verified
+
+**Phase:** 6 (Slack notification, per spec §9)
+
+- Wired `lib/slack.ts`'s `postToSlack()` into `app/api/enquiry/route.ts`, called after the DB insert succeeds. `postToSlack()` already never throws (built in Step 2's session), so the critical rule — Slack failure must never surface to the caller — is enforced by construction, not an extra try/catch. A failed delivery is logged via `console.error` (Vercel function logs) for now; no dedicated replay queue exists yet, out of scope for this build.
+- Verified locally against the real webhook and real DB together: valid payload → `200` with id, row confirmed in Postgres, message confirmed landing correctly in Slack (screenshot from Steven — header now carries the postcode: `URGENT · Roof repair · AB16`, matching the DB row's id exactly).
+- Verified the critical failure case: deliberately broken `SLACK_WEBHOOK_URL` → still `200` with id, DB row still written and confirmed present, failure logged server-side (`Slack delivery failed for enquiry ...: Slack responded 404`) rather than thrown.
+- Both test rows deleted after verification — table stays empty of test data.
+
+**Verified:** full pipeline (validate → DB write → Slack notify) confirmed working end-to-end locally, both the happy path and the Slack-failure path, before pushing.
+
+**Not done:** Step 7 (dedupe), Steps 8–9 (form, photos).
+
+---
+
 ## 2026-08-27 — Step 5: DB log wired in and verified end-to-end
 
 **Phase:** 5 (Postgres log, per spec §9)
