@@ -7,6 +7,12 @@ import { computeDedupeHash, findExistingEnquiryId } from "@/lib/dedupe";
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
 
+  // Honeypot: a hidden field real users never fill. Bots must not learn they
+  // were caught, so this looks identical to a real success response.
+  if (body && typeof body === "object" && "company_website" in body && body.company_website) {
+    return NextResponse.json({ ok: true });
+  }
+
   const result = enquirySchema.safeParse(body);
   if (!result.success) {
     return NextResponse.json(

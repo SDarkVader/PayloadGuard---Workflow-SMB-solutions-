@@ -4,6 +4,24 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 8: the enquiry form, built and verified in a real browser
+
+**Phase:** 8 (front-end, per spec §9 — "only now")
+
+- Steven signed off explicitly: functionality is the objective, layout/design can change later. Built accordingly — plain, functional CSS, no visual investment beyond the spec's non-negotiables.
+- `components/EnquiryForm.tsx`: client component, all fields from the data schema (name/phone required, email/postcode/message optional, job_type as a native `<select>` populated from `config/client.ts`, urgency as a tappable radio-button group rather than a select since there are only 3 options and the spec explicitly wants large tap targets over a dropdown). Honeypot field (`company_website`) included, visually hidden off-screen (not `display:none`, so it stays in the DOM for anything that scrapes visible-in-markup fields) and `tabIndex={-1}` so real keyboard users skip straight past it.
+- Wired the honeypot server-side too: `app/api/enquiry/route.ts` now checks `company_website` before validation (spec §4 step 1) and returns an identical-looking `200` without writing anything if populated — bots get no signal they were caught.
+- Submit flow: `400` → field-level errors rendered next to each field, form stays. Any other non-2xx or network failure → plain-language error message, tells the customer to call instead. Success → replaces the form with "Enquiry sent" and confirms job type + postcode (photo count deliberately not included yet — that's Step 9, no photo input exists on the form yet).
+- `app/page.tsx` now renders the real form instead of the placeholder text.
+- **Tested in an actual browser, not just curl** — installed `playwright` temporarily (`npm install --no-save`, never touched package.json/lock) and drove the pre-installed Chromium against `next start` at a mobile viewport (390×844): empty submit → field errors shown correctly next to fields; valid submit → real DB write + real Slack post confirmed (screenshot from Steven matched the id exactly, `775b07df...`) + success state rendered correctly; Tab key → visible focus ring confirmed on-screen, honeypot correctly skipped in tab order. Screenshots reviewed directly, not just trusted from text output.
+- Cleaned up: scratch test script deleted, test DB row deleted, `playwright` was never added to package.json (confirmed via `git status` before committing).
+
+**Verified:** full form flow in a real browser — errors, success, focus visibility, honeypot skip, and the real DB+Slack write all confirmed with screenshots, not assumed from code review.
+
+**Not done:** Step 9 (photos — client-side compression, blob upload, inline Slack rendering, success state extended to include photo count).
+
+---
+
 ## 2026-08-27 — Step 7: dedupe wired in and verified
 
 **Phase:** 7 (dedupe, per spec §9)
