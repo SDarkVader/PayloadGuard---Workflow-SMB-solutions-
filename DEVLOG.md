@@ -17,6 +17,18 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Slack message: every field explicitly labeled
+
+**Phase:** Slack notification quality, no build-order step
+
+- `lib/slack.ts`: previously only name (bold, unlabeled) and phone (as a `tel:` link) were guaranteed visible in the body; email and message were appended with no label if present, and postcode/job type/urgency only appeared inside the compact header line (`URGENT · Flat roof · AB24 3FX`) with no field name attached. Rewrote the body so every field gets an explicit `*Label:* value` line — Name, Phone, Email (if present), Postcode (if present), Job type, Urgency, Message (if present) — so nothing is ambiguous or easy to miss, the description/message field included. The compact header line is unchanged and still gives a fast triage glance.
+- Verified locally against the real Slack webhook (posting doesn't need Vercel's OIDC token the way Blob does, so this didn't need a production deploy): submitted a full multipart request with invented data covering every optional field (email, postcode, a multi-sentence message) via `POST /api/enquiry` against `next start`. Response `200 { photoCount: 0 }`; queried the DB directly and confirmed every field — name, phone, email, postcode, job_type, urgency, message — persisted exactly as sent, which is the same payload `postToSlack` receives. Test row deleted afterward (`before: 1, after: 0`).
+- Confirmed by Steven via screenshot: the message posted with every field clearly labeled and correctly valued — Name, Phone, Email, Postcode, Job type, Urgency, and Message (the invented flat-roof/felt description in full) — plus the existing compact header line and footer.
+
+**Verified:** build clean, DB row confirms the full labeled payload sent to `postToSlack`, and Steven confirmed the rendered Slack message shows every field with its label, description included.
+
+---
+
 ## 2026-08-27 — Card background light blue, entry fields white
 
 **Phase:** post-Step-9 polish (continuation of the styling pass above), no build-order step

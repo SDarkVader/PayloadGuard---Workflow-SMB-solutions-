@@ -20,9 +20,15 @@ function buildSlackMessage(payload: SlackEnquiryPayload) {
     .filter(Boolean)
     .join(" · ");
 
-  const bodyLines = [`*${payload.name}*`, `<tel:${payload.phone}|${payload.phone}>`];
-  if (payload.email) bodyLines.push(payload.email);
-  if (payload.message) bodyLines.push(payload.message);
+  const bodyLines = [
+    `*Name:* ${payload.name}`,
+    `*Phone:* <tel:${payload.phone}|${payload.phone}>`,
+  ];
+  if (payload.email) bodyLines.push(`*Email:* ${payload.email}`);
+  if (payload.postcode) bodyLines.push(`*Postcode:* ${payload.postcode}`);
+  bodyLines.push(`*Job type:* ${jobTypeLabel}`);
+  bodyLines.push(`*Urgency:* ${urgencyLabel}`);
+  if (payload.message) bodyLines.push(`*Message:* ${payload.message}`);
 
   const footer = `Enquiry ${payload.id} · ${payload.createdAt.toISOString()}`;
 

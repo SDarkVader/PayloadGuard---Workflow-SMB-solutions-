@@ -21,7 +21,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 ## Hosting & external services
 
 - Vercel project: `payload-guard-workflow-smb-solutions`, team `stevenallandark-2930's projects` (Hobby plan), linked to GitHub `SDarkVader/PayloadGuard---Workflow-SMB-solutions-` (private), production branch `main`, auto-deploys on push.
-- **Slack:** Incoming Webhook live, wired in, rendering correctly (now including inline photo blocks, pending production confirmation).
+- **Slack:** Incoming Webhook live, wired in, rendering correctly — inline photo blocks confirmed in production, every field (name, phone, email, postcode, job type, urgency, message) now explicitly labeled in the message body and confirmed by Steven via screenshot.
 - **Postgres:** Neon-backed via Vercel Storage, `DATABASE_URL` live, driver is `@neondatabase/serverless` (HTTP-based — don't switch to `pg`).
 - **Blob:** provisioned (`payloadguard-photos`, LHR1, Public access), OIDC-based connection (no `BLOB_READ_WRITE_TOKEN` needed). Confirmed working with a real write+delete in production. Photo URLs are unguessable random UUIDs; reachable only via the Slack channel or DB access — see DEVLOG for the fuller access-model note, this came up as a direct question from Steven.
 
