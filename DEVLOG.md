@@ -4,6 +4,25 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 9: photos, built and verified (with one real bug caught and fixed)
+
+**Phase:** 9 (photos — last piece of Build 1's core loop, per spec §9)
+
+- `POST /api/enquiry` switched from JSON to `multipart/form-data` (matches the spec's architecture diagram, §2) — this is a real contract change, not additive; `EnquiryForm.tsx` now submits via `FormData` instead of a hand-built JSON object, which also let the submit handler shrink since `new FormData(form)` grabs every named field automatically (honeypot included).
+- `components/PhotoInput.tsx`: `<input type="file" accept="image/*" multiple>`, client-side compression via `createImageBitmap` + canvas (resize to 1600px longest edge, JPEG quality 0.8, no extra dependency), enforces max 4 with a clear message when exceeded, preview list with remove buttons, "Compressing photos…" status text.
+- `lib/blob.ts`: `uploadPhoto()` via `@vercel/blob`'s `put()`, random UUID key per photo (`enquiry-photos/<uuid>.jpg`) — independent of the enquiry id, so no ordering dependency on when the DB row gets created.
+- `app/api/enquiry/route.ts`: added photo count/size validation (max 4, 10MB each → 400), then per-spec upload behavior — each photo uploaded in its own try/catch, a failed upload is logged and skipped rather than failing the whole enquiry ("a lost photo must not lose the lead").
+- `lib/slack.ts`: `photoUrls` added to the payload, rendered as Slack `image` blocks between the body and footer so they show inline.
+- **Real bug caught by testing, not just code review:** first version had the front-end report its *own* photo count (`photos.length`, captured before the request) in the success message, rather than what the server actually stored. Local Playwright testing surfaced this immediately — Blob uploads fail in this sandbox (see below), so the DB row had `photo_urls: []`, yet the success message confidently said "with 2 photos received." Fixed by having the endpoint return `photoCount: photoUrls.length` (the real, post-upload count) and having the client display that instead of its own guess. This isn't just a local-environment workaround — the same lie would happen in production any time a real upload genuinely fails, which the spec explicitly anticipates ("if an upload fails, continue without it"). The success state has to reflect what got persisted, not what the client attempted.
+- **Environment limit, not a bug:** Vercel Blob's newer connection type authenticates via OIDC tokens minted by Vercel's platform infrastructure at request time. This sandbox's local `next start` has no such token (confirmed via the exact error: `Vercel Blob: No blob credentials found ... use oidcToken (or VERCEL_OIDC_TOKEN) with storeId`), so photo uploads can only be verified against the real deployment, not locally. Everything else (form, compression, validation, DB write with empty photo_urls, Slack post without image blocks) was fully verified locally first.
+- Test images generated in-browser via canvas (no image tooling installed in this sandbox) rather than skipping the real-file test.
+
+**Verified locally (Playwright + real DB/Slack, Blob upload path excluded — see above):** field errors, honeypot, valid submission without photos, compression producing a smaller file, and — after the fix — an honest success message when photos didn't actually get stored.
+
+**Not yet verified:** the actual photo upload + inline Slack rendering, which needs the real deployment. Next step is pushing and checking production directly.
+
+---
+
 ## 2026-08-27 — Vercel Blob provisioned; confirmed working via OIDC, not a static token
 
 **Phase:** infra verification, no build-order step

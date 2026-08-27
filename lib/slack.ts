@@ -10,6 +10,7 @@ export interface SlackEnquiryPayload {
   jobType: JobType;
   urgency: Urgency;
   message?: string;
+  photoUrls?: string[];
 }
 
 function buildSlackMessage(payload: SlackEnquiryPayload) {
@@ -25,11 +26,18 @@ function buildSlackMessage(payload: SlackEnquiryPayload) {
 
   const footer = `Enquiry ${payload.id} · ${payload.createdAt.toISOString()}`;
 
+  const photoBlocks = (payload.photoUrls ?? []).map((url) => ({
+    type: "image",
+    image_url: url,
+    alt_text: "Enquiry photo",
+  }));
+
   return {
     text: headerLine,
     blocks: [
       { type: "header", text: { type: "plain_text", text: headerLine } },
       { type: "section", text: { type: "mrkdwn", text: bodyLines.join("\n") } },
+      ...photoBlocks,
       { type: "context", elements: [{ type: "mrkdwn", text: footer }] },
     ],
   };

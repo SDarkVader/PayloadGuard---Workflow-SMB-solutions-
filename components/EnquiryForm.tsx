@@ -2,20 +2,22 @@
 
 import { useState, type FormEvent } from "react";
 import { activeClient, type JobType } from "@/config/client";
+import PhotoInput from "./PhotoInput";
 
 type FieldErrors = Partial<
-  Record<"name" | "phone" | "email" | "postcode" | "job_type" | "urgency" | "message", string[]>
+  Record<"name" | "phone" | "email" | "postcode" | "job_type" | "urgency" | "message" | "photos", string[]>
 >;
 
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
-  | { status: "success"; jobType: JobType; postcode?: string }
+  | { status: "success"; jobType: JobType; postcode?: string; photoCount: number }
   | { status: "error"; message: string };
 
 export default function EnquiryForm() {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [state, setState] = useState<SubmitState>({ status: "idle" });
+  const [photos, setPhotos] = useState<File[]>([]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,23 +26,15 @@ export default function EnquiryForm() {
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    photos.forEach((photo) => formData.append("photos", photo));
 
-    const payload = {
-      name: formData.get("name"),
-      phone: formData.get("phone"),
-      email: formData.get("email") || undefined,
-      postcode: formData.get("postcode") || undefined,
-      job_type: formData.get("job_type"),
-      urgency: formData.get("urgency"),
-      message: formData.get("message") || undefined,
-      company_website: formData.get("company_website") || undefined,
-    };
+    const jobType = formData.get("job_type") as JobType;
+    const postcode = (formData.get("postcode") as string) || undefined;
 
     try {
       const response = await fetch("/api/enquiry", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: formData,
       });
 
       if (response.status === 400) {
@@ -58,12 +52,14 @@ export default function EnquiryForm() {
         return;
       }
 
-      setState({
-        status: "success",
-        jobType: payload.job_type as JobType,
-        postcode: payload.postcode as string | undefined,
-      });
+      // Trust what the server actually stored, not what we tried to send —
+      // an upload can fail server-side and still return 200 (see spec: a
+      // lost photo must not lose the lead), so the success state must
+      // reflect reality, not intent.
+      const data = await response.json();
+      setState({ status: "success", jobType, postcode, photoCount: data.photoCount ?? 0 });
       form.reset();
+      setPhotos([]);
     } catch {
       setState({
         status: "error",
@@ -78,7 +74,11 @@ export default function EnquiryForm() {
         <h2>Enquiry sent</h2>
         <p>
           We&apos;ve recorded your {activeClient.jobTypes[state.jobType]} enquiry
-          {state.postcode ? ` for ${state.postcode}` : ""}.
+          {state.postcode ? ` for ${state.postcode}` : ""}
+          {state.photoCount > 0
+            ? `, with ${state.photoCount} photo${state.photoCount === 1 ? "" : "s"} received`
+            : ""}
+          .
         </p>
       </div>
     );
@@ -139,6 +139,9 @@ export default function EnquiryForm() {
         ))}
         {errors.urgency && <p className="field-error">{errors.urgency[0]}</p>}
       </fieldset>
+
+      <PhotoInput photos={photos} onChange={setPhotos} />
+      {errors.photos && <p className="field-error">{errors.photos[0]}</p>}
 
       <div className="field">
         <label htmlFor="message">Tell us what&apos;s happened (optional)</label>
