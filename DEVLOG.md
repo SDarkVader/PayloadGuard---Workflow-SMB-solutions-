@@ -4,6 +4,23 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 1: live deploy verified
+
+**Phase:** 1 (deploy loop, per spec §9)
+
+- Discovered a live Vercel MCP connection already available (Hobby plan, team `stevenallandark-2930's projects`) — no manual dashboard setup needed from Steven after all.
+- First `create_git_project` call failed 403 (permission/GitHub App access); Steven granted access, retry succeeded and reused an already-existing Vercel project (`payload-guard-workflow-smb-solutions`) linked to `main`.
+- Deployment initially appeared inaccessible (302 → Vercel SSO login) — this is deployment protection (`ssoProtection: all_except_custom_domains`) gating the per-deployment preview URL, not a broken build. Verified via `get_project_deployment_protection` rather than assuming.
+- Confirmed the actual page content two ways: `web_fetch_vercel_url` (authenticated) returned 200 with the correct HTML, then a plain unauthenticated `curl` against the stable production alias `https://payload-guard-workflow-smb-solution.vercel.app` also returned 200 — so the production URL is genuinely public, no Vercel login required. Preview URLs stay SSO-gated, which is fine, nothing needs to hit those.
+- Flagged to Steven, not yet decided: GitHub repo is public (content is clean, no PII/secrets — confirmed by a full-tree grep for the pseudonymized-out terms before the Phase 0 commit).
+- No env vars, Postgres, or Blob storage set up yet — that starts at Step 5.
+
+**Verified:** live HTTPS URL reachable and correct, unauthenticated. Step 1 checklist item (spec §9) done.
+
+**Not done:** Steps 2–9.
+
+---
+
 ## 2026-08-27 — Repo structure + docs scaffold
 
 **Phase:** 0 (repo setup, no application logic yet)
