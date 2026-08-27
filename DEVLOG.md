@@ -4,6 +4,26 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 2 confirmed; lib/slack.ts built and proven standalone
+
+**Phase:** 2 done; Slack module built ahead of Step 6 wiring (held back deliberately)
+
+- Steven created the Slack app, enabled Incoming Webhooks, added it to a test channel, and confirmed "pipeline test" landed. Step 2 (spec §9) is done.
+- `SLACK_WEBHOOK_URL` saved to local `.env.local` (gitignored, confirmed via `git check-ignore`, confirmed absent from `git status`). Production env var still needs Steven to add it in the Vercel dashboard — no tool available here can set Vercel env vars (checked the Vercel MCP toolset and the `vercel` CLI; neither is available/authenticated in this environment), so this one is on him.
+- Built `lib/slack.ts` for real: message formatting per spec §5 (header line urgency/job-type/postcode, tap-to-call phone, footer with id/timestamp), `postToSlack()` wrapped in try/catch so a delivery failure can never throw — returns `{ ok: false, error }` instead, matching the "Slack failure must not surface" rule.
+- Deliberately did **not** wire this into `app/api/enquiry/route.ts` yet. Spec §9 Step 6 is "Post to Slack. Post after the log write" — Step 5 (DB log) doesn't exist yet, and wiring notification ahead of the durable write would invert the core principle (log is source of truth, notification is not). Holding the line on build order even though Steven only asked for Slack, not to skip Step 5.
+- Proved the module standalone instead, same spirit as Step 2's own curl proof: temporary script (`scratch-test-slack.ts`, never committed, deleted immediately after) imported `postToSlack` directly and ran three cases via `npx tsx`:
+  - Real webhook, valid payload → `{"ok":true}`, message confirmed formatted correctly.
+  - Broken webhook URL → `{"ok":false,"error":"Slack responded 404"}`, no throw.
+  - Missing env var → `{"ok":false,"error":"SLACK_WEBHOOK_URL not set"}`, no throw.
+- `npm run build` and `npm run lint` still clean; `/api/enquiry` route size unchanged in the build output, confirming `lib/slack.ts` genuinely isn't bundled into it yet.
+
+**Verified:** Slack module works standalone against the real webhook, both success and failure paths. Endpoint itself unchanged.
+
+**Not done:** Step 5 (DB) — next up once Steven has `DATABASE_URL`. Step 6 (actually wiring Slack into the endpoint) waits on that.
+
+---
+
 ## 2026-08-27 — Steps 3 & 4: bare endpoint + validation
 
 **Phase:** 3–4 (built in parallel with Step 2, which Steven is doing on his own account)
