@@ -12,7 +12,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 **Live production URL:** `https://payload-guard-workflow-smb-solution.vercel.app` — verified 200 OK via plain unauthenticated `curl`, serving the PayloadGuard placeholder page.
 
-**`POST /api/enquiry`** is live and validates. Verified locally (build, lint, and curl against `next start`) before pushing, then re-verified against the deployed URL:
+**`POST /api/enquiry`** is live and validates — confirmed against the production URL itself (not just locally):
 - Empty/invalid body → `400` with field-level errors (`name`, `phone`, `job_type`, `urgency`).
 - Bad enum values (`job_type`/`urgency`) → `400` with the specific field errors.
 - Valid payload (matches the spec's own curl example) → `200 {"ok":true}`.

@@ -14,7 +14,7 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 - Verified locally before any push: `npm run build`, `npm run lint`, then `npm run start` + curl against `localhost:3000` for three cases — empty body, invalid enum values, and the spec's own valid-payload example. All three matched expected status/body.
 - No DB write, Slack post, or dedupe yet. No env vars touched.
 
-**Verified:** locally (build/lint/curl) before push; will re-verify against the live URL after deploy.
+**Verified:** locally (build/lint/curl), then re-verified against the live production URL after deploy — all three cases (empty body, invalid enums, valid payload) matched local results exactly.
 
 **Not done:** Step 2 (Steven, in progress), Steps 5–9.
 
