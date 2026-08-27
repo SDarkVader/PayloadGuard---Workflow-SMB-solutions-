@@ -30,7 +30,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - `app/page.tsx` — gradient hero header (headline + "45-minute callback, with text updates" badge) above the real `EnquiryForm`.
 - `components/EnquiryForm.tsx` — full form incl. `PhotoInput`, submits `FormData` (not JSON).
 - `components/PhotoInput.tsx` — big dashed-border "Add photos" button (hidden native input under a styled label), client-side compression (canvas, 1600px/quality 0.8), max 4, preview + remove.
-- `app/globals.css` — styled pass: color palette (blue/orange), gradient hero banner, rounded card with colored top accent, colored focus states, urgency options highlight when selected. Purely visual — no behavior changed.
+- `app/globals.css` — styled pass: color palette (blue/orange), gradient hero banner, light-blue form card with colored top accent and white entry fields, colored focus states, urgency options highlight when selected. Purely visual — no behavior changed.
 - `app/api/enquiry/route.ts` — honeypot → Zod validation → photo count/size validation → dedupe lookup → photo upload (per-file try/catch, never fails the enquiry) → Postgres insert → Slack post (with image blocks) → returns id + photoCount.
 - `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — all wired in.
 - `db/schema.sql` — `enquiries` table incl. `dedupe_hash`.

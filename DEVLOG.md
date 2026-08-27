@@ -17,6 +17,18 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Card background light blue, entry fields white
+
+**Phase:** post-Step-9 polish (continuation of the styling pass above), no build-order step
+
+- Added a dedicated `--color-card-bg` token (light blue, `#dbeafe`; a muted navy in dark mode) separate from `--color-surface` (white/dark-neutral, used for the actual input fields), so the two can be styled independently rather than sharing one variable.
+- Form card background switched to `--color-card-bg`; all entry fields (text/email/tel inputs, select, textarea, and the photo-upload button, which was previously blue-tinted) switched to or kept `--color-surface` — white, so they stand out clearly against the light-blue card.
+- Verified via `npm run build` (clean) and a Playwright screenshot at 390px confirming the card is visibly light blue and every field is white.
+
+**Verified:** build clean, screenshot confirms the intended contrast.
+
+---
+
 ## 2026-08-27 — Step 9 photo upload verified in production; Build 1 core loop (Steps 1–9) complete
 
 **Phase:** production verification, closing out Step 9
