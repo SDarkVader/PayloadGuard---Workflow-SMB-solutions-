@@ -4,6 +4,23 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Step 7: dedupe wired in and verified
+
+**Phase:** 7 (dedupe, per spec §9)
+
+- `lib/dedupe.ts`: `computeDedupeHash(phone, message, at)` — sha256 of `phone|message|hour-bucket`, hour truncated in UTC. `findExistingEnquiryId(hash)` looks it up.
+- `db/schema.sql` updated: added `dedupe_hash text` column + index. Written idempotently (`CREATE TABLE IF NOT EXISTS` with the column included, plus `ALTER TABLE ADD COLUMN IF NOT EXISTS` below it) so it's safe to run against either a fresh table or the one already live in production.
+- Applied the migration directly to production. First attempt ran the whole file as one `sql()` call and failed — the Neon HTTP driver's tagged-template query doesn't support multiple statements per call (`cannot insert multiple commands into a prepared statement`). Split into individual statements and ran each in sequence; confirmed via `information_schema.columns` that `dedupe_hash` exists.
+- `lib/db.ts`: `insertEnquiry()` now stores `dedupe_hash` on every row.
+- `app/api/enquiry/route.ts`: after validation, compute the hash from the current request; if a matching hash already exists, return `200` with the existing id and skip both the insert and the Slack post (it's the same enquiry, already announced). Otherwise insert as before (now with the hash) and proceed to Slack.
+- Verified locally against the real database: identical payload submitted twice → same id both times, confirmed only one row in the DB; a payload with a different message (same phone, same hour) → a genuinely new id and a second row. Both test rows deleted after confirming.
+
+**Verified:** dedupe collapses true duplicates, doesn't over-collapse distinct enquiries. Confirmed against the real production database, not mocked.
+
+**Not done:** honeypot handling, Step 8 (the actual form), Step 9 (photos).
+
+---
+
 ## 2026-08-27 — Step 6: Slack wired in, full pipeline verified
 
 **Phase:** 6 (Slack notification, per spec §9)

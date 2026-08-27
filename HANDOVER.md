@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-27 (Steps 1–6 complete and verified; Step 7 next)
+**Last updated:** 2026-08-27 (Steps 1–7 complete and verified; Step 8 next — the form)
 
 ## Where we are
 
@@ -10,17 +10,19 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - Step 2 (Slack webhook proof): done.
 - Steps 3–4 (bare endpoint + Zod validation): done.
 - Step 5 (DB log): done, verified against the real database.
-- **Step 6 (Slack notification): done.** `POST /api/enquiry` now validates → writes to Postgres → posts to Slack, in that order. Verified end-to-end: real webhook + real DB together (Slack message confirmed landing correctly by Steven, screenshot matched the DB row's id exactly), and the critical failure case (broken webhook still returns 200, DB write still happens, failure logged server-side not thrown).
+- Step 6 (Slack notification): done, verified end-to-end in production (Steven confirmed the message in Slack, screenshot matched the DB row's id exactly). Broken-webhook failure case also confirmed — still 200, DB write intact, failure logged not thrown.
+- **Step 7 (dedupe): done.** Hash of `phone + message + hour-bucket`; a duplicate within the hour returns the existing id and skips both the DB insert and the Slack post. Verified against the real database: identical resubmit → same id, one row; genuinely different message → new id, second row. Migration to add the `dedupe_hash` column was applied directly to the production database (see DEVLOG for the multi-statement gotcha with the Neon HTTP driver).
 
 **Live production URL:** `https://payload-guard-workflow-smb-solution.vercel.app`
 
 **`POST /api/enquiry`** — full core pipeline working:
 - Empty/invalid body → `400` with field-level errors.
-- Valid payload → validates, writes to Postgres, posts to Slack, returns `200 { ok: true, id }`.
-- DB failure → `500`.
-- Slack failure → still `200` (record already saved); logged server-side for now, no replay queue yet.
+- Duplicate (same phone+message within the hour) → `200` with the existing id, no new row, no new Slack post.
+- Valid new payload → validates, writes to Postgres, posts to Slack, returns `200 { ok: true, id }`.
+- DB failure (including the dedupe lookup) → `500`.
+- Slack failure → still `200` (record already saved); logged server-side, no replay queue yet.
 
-No dedupe, no honeypot, no form, no photos yet.
+No honeypot, no form, no photos yet.
 
 ## Hosting & external services
 

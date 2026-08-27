@@ -10,5 +10,10 @@ CREATE TABLE IF NOT EXISTS enquiries (
   message text,
   photo_urls text[] NOT NULL DEFAULT '{}',
   status text NOT NULL DEFAULT 'new',
-  source text NOT NULL
+  source text NOT NULL,
+  dedupe_hash text
 );
+
+ALTER TABLE enquiries ADD COLUMN IF NOT EXISTS dedupe_hash text;
+
+CREATE INDEX IF NOT EXISTS idx_enquiries_dedupe_hash ON enquiries (dedupe_hash);

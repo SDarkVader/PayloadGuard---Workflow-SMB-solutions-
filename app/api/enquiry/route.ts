@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enquirySchema } from "@/lib/schema";
 import { insertEnquiry } from "@/lib/db";
 import { postToSlack } from "@/lib/slack";
+import { computeDedupeHash, findExistingEnquiryId } from "@/lib/dedupe";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -15,9 +16,15 @@ export async function POST(request: NextRequest) {
   }
 
   const data = result.data;
+  const dedupeHash = computeDedupeHash(data.phone, data.message, new Date());
 
   let inserted;
   try {
+    const existingId = await findExistingEnquiryId(dedupeHash);
+    if (existingId) {
+      return NextResponse.json({ ok: true, id: existingId });
+    }
+
     inserted = await insertEnquiry({
       name: data.name,
       phone: data.phone,
@@ -27,6 +34,7 @@ export async function POST(request: NextRequest) {
       urgency: data.urgency,
       message: data.message,
       source: "web_form",
+      dedupeHash,
     });
   } catch {
     return NextResponse.json({ ok: false, error: "Failed to save enquiry" }, { status: 500 });
