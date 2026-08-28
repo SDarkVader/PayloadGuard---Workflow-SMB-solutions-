@@ -6,7 +6,7 @@ import { computeDedupeHash, findExistingEnquiryId } from "@/lib/dedupe";
 import { sendConfirmationSms } from "@/lib/sms";
 import {
   extractFields,
-  extractStructuredData,
+  fetchStructuredOutputs,
   isExpectedAssistant,
   mapTimeframeToUrgency,
   verifyVapiSignature,
@@ -84,9 +84,11 @@ async function logVoiceEnquiry(fields: {
  * Receives Vapi's webhook for the general-enquiries call branch. Handles
  * two possible mechanisms (see lib/vapi.ts for why both exist):
  *
- * - "end-of-call-report" with analysis.structuredData — the current setup
- *   (no custom Tool configured on the assistant), fires once after the
- *   call ends.
+ * - "end-of-call-report" — fires once after the call ends. The fields
+ *   themselves come from Vapi's Structured Outputs, computed
+ *   asynchronously and fetched via a follow-up API call
+ *   (fetchStructuredOutputs) rather than read off this payload directly —
+ *   confirmed necessary via a real test call (2026-08-28).
  * - "tool-calls" — fires mid-call if a Tool is added later; blocks on the
  *   response, which is fed back to the assistant.
  *
@@ -123,12 +125,15 @@ export async function POST(request: NextRequest) {
   }
 
   if (message.type === "end-of-call-report") {
-    const structuredData = extractStructuredData(message);
+    const callId = message.call?.id;
+    const structuredData = callId ? await fetchStructuredOutputs(callId) : null;
     const fields = structuredData ? extractFields(structuredData) : null;
 
     if (!fields) {
       // No structured data (call ended before all fields were collected,
-      // or the Analysis schema isn't configured yet) — nothing to log.
+      // Structured Outputs weren't ready within the retry budget, or
+      // VAPI_API_KEY isn't set) — nothing to log.
+      console.error(`Voice intake: no structured data for call ${callId ?? "unknown"}`);
       return NextResponse.json({ ok: true });
     }
 

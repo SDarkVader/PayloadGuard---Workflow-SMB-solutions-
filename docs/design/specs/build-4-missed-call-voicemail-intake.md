@@ -4,7 +4,7 @@
 
 **Purpose:** Turn an inbound phone call that goes unanswered into the same kind of structured Slack lead Build 1 produces from the web form — via an AI voice intake that picks up after the normal ring, not a traditional voicemail beep.
 
-**Status:** General-enquiries branch built and fully verified in production (2026-08-28) — DB write, Slack card, and SMS confirmation all confirmed working against the real deployed endpoint, real Twilio account, and a real received text. The only remaining gap is a genuine phone call: nothing on the Vapi side points at this webhook yet (Server URL is set; the Analysis-tab structured data schema is not). Emergency-branch routing is a separate, later piece — not this route. See §11.
+**Status:** General-enquiries branch built and verified against a real phone call (2026-08-28). A real test call correctly reached the assistant, collected all four fields, and confirmed Vapi's "Structured Outputs" feature extracted them correctly — but nothing arrived at this webhook, because Structured Outputs are **not included in the `end-of-call-report` payload**; they're computed asynchronously and must be fetched via a follow-up call to Vapi's API. This was a genuine architecture gap in the original build (which assumed the older `analysisPlan.structuredDataSchema` mechanism), not a config error — see §5.1. Fixed and re-verified against the real call's actual data. Emergency-branch routing is a separate, later piece — not this route. See §11.
 
 **Depends on:** Build 1's pipeline (live) — this build reuses its DB table, its Slack message builder, and its config pattern rather than creating parallel ones.
 
@@ -53,6 +53,14 @@ The 45-minute commitment carries over from the web form for consistency, but per
 **Existing gap found while reviewing the repo for this spec:** the web form's badge (`app/page.tsx`) currently hardcodes the string `"45-minute callback, with text updates"` directly in JSX — it does not read from `config/client.ts`. That's a pre-existing violation of core principle #3 (config-per-client, logic-shared), not something this build introduces, but this build makes it load-bearing: the same number needs to appear in the AI's spoken greeting, the confirmation SMS, and the web form badge, and it cannot drift between the three.
 
 **Done (2026-08-27):** `callbackWindowMinutes: 45` added to `config/client.ts`, and the web form's hero badge now reads `activeClient.callbackWindowMinutes` instead of a hardcoded string. Still outstanding: once the Vapi assistant and SMS confirmation exist, their greeting/template copy must read this same value rather than hardcoding it again — this fix only covers the one place that existed before this build was scoped.
+
+### 4.1 Real architecture correction: Structured Outputs are async
+
+A real test call surfaced a genuine gap, not a config mistake. Steven's assistant uses Vapi's **Structured Outputs** feature (visible under a "Structured Outputs" tab per call, distinct from the older "Analysis" tab this build originally assumed). Per Vapi's own docs and community confirmation: Structured Outputs are computed by a separate LLM call *after* `end-of-call-report` fires, and are **never included in that webhook payload**. They must be fetched afterward via `GET https://api.vapi.ai/call/{id}`, reading `artifact.structuredOutputs`.
+
+`lib/vapi.ts`'s `fetchStructuredOutputs()` now does this: on receiving `end-of-call-report`, it polls the Call API (with retries and a delay, since the extraction takes a few seconds) rather than reading fields off the webhook payload directly. This means `VAPI_API_KEY` **is** needed after all — reversing this spec's earlier claim that it wasn't, made before this mechanism was understood.
+
+Verified against the real call: `fetchStructuredOutputs()` correctly returned `{name, phone, postcode, description}` matching what Vapi's dashboard showed, and a full round-trip (DB row, Slack card, SMS) using that real data was confirmed — Slack via a screenshot after a client-side refresh (the card had posted correctly all along; it was just a stale view).
 
 ## 5. Slack message format
 
@@ -115,6 +123,7 @@ No changes needed to `db/schema.sql`, `lib/db.ts`, or `lib/dedupe.ts` — confir
 ### Environment variables
 
 ```
+VAPI_API_KEY=             # required — fetches Structured Outputs after end-of-call-report (§4.1)
 VAPI_WEBHOOK_SECRET=      # optional but recommended — HMAC verification skips gracefully if unset
 VAPI_ASSISTANT_ID=        # optional — lightweight sanity check, skips gracefully if unset
 TWILIO_ACCOUNT_SID=       # for the SMS confirmation to actually send
@@ -122,7 +131,7 @@ TWILIO_AUTH_TOKEN=
 TWILIO_FROM_NUMBER=
 ```
 
-None of these are set in production yet. Notably, **no Vapi API key is needed** — this route only ever receives from Vapi, never calls out to it, so nothing needs storing for that. `VAPI_ASSISTANT_ID` isn't a secret (it's an identifier), so it's low-risk to add whenever convenient.
+**Correction:** an earlier version of this doc claimed no Vapi API key was needed, on the assumption this route only ever receives from Vapi. That assumption was wrong — see §4.1. `VAPI_API_KEY` is required for the real flow to work. Twilio vars are confirmed live in Vercel production; `VAPI_API_KEY` is local-only (`.env.local`) as of this writing — needs adding to Vercel too.
 
 ## 9. Vapi vs. self-built — decision
 
@@ -138,17 +147,15 @@ Recorded in full in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-
 6. **Cost to CLIENT_ALPHA, if any.** Explicitly deferred in Steven's note, to be addressed separately from the technical build.
 7. **The Build 2 "acknowledgment text principle."** Steven's note references a principle "already agreed for build 2, on-site capture" for the confirmation-SMS wording. There is no Build 2 spec or decision doc in this repo yet — `docs/design/INDEX.md` lists Build 2 as "Not written yet." This build's SMS copy (§6) is being scoped without that reference. Flagging rather than guessing at content that hasn't been captured anywhere.
 
-## 11. What's left before a real call has been proven end-to-end
+## 11. Status: proven against a real call, one env var left
 
 1. ~~Confirm repo structure fit~~ — done.
 2. ~~Build `/api/voice-intake`, `lib/vapi.ts`, `lib/sms.ts`, config addition~~ — done, verified against synthetic payloads (§7).
 3. ~~SMS provider decision~~ — Twilio, confirmed working with a real send to Steven's phone (§6).
 4. ~~Add the three Twilio env vars to Vercel's production environment~~ — done; hit and fixed a real misconfiguration (Key field held the secret value, not the variable name) along the way, diagnosed via Vercel's runtime logs rather than guessing (§6).
-5. ~~Set the Server URL~~ — done, `https://payload-guard-workflow-smb-solution.vercel.app/api/voice-intake`.
-6. **Configure the Analysis-tab structured data schema in Vapi.** This is the one piece left before a real call reaches this webhook at all — Server URL alone isn't enough; Vapi needs to know what structured data to extract and send. Schema given to Steven in chat (name/phone/postcode/description).
-7. **Confirm the exact field/schema key names** match what `lib/vapi.ts`'s `extractFields()` expects once the schema above is actually configured — built against a best guess from the live system prompt.
-8. **A real end-to-end test call** — ring the number, let it go unanswered, confirm the Slack card, DB row, and SMS all land correctly from an actual call. Everything downstream of Vapi's webhook is now proven in production; this is the only remaining unverified link.
-9. Add the timing/urgency question to the assistant's system prompt (Steven's stated next step for the agent itself) and confirm `mapTimeframeToUrgency()`'s keyword heuristic actually fits the real wording once it exists.
+5. ~~Real end-to-end test call~~ — done (2026-08-28). Surfaced a genuine architecture gap (§4.1: Structured Outputs are async, not part of the webhook payload) rather than confirming the original design. Fixed, and the fix verified directly against that real call's actual data — DB row, Slack card, and SMS all correct.
+6. **Add `VAPI_API_KEY` to Vercel's production environment.** This is now the only missing piece — the code is proven correct locally against real data, but production can't poll Structured Outputs without this key. Once added and redeployed, the next real call should work fully live end-to-end, not just locally against a past call's data.
+7. Add the timing/urgency question to the assistant's system prompt (Steven's stated next step for the agent itself) and confirm `mapTimeframeToUrgency()`'s keyword heuristic actually fits the real wording once it exists.
 
 ## 12. What's out of scope for v1 (from Steven's note)
 

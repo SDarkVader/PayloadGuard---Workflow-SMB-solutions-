@@ -17,6 +17,22 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Real test call surfaces and fixes a genuine architecture gap: Structured Outputs are async
+
+**Phase:** Build 4, general-enquiries branch — first real phone call
+
+- With Server URL set and Twilio wired, Steven placed a real test call. Result: "calls work, doesn't send anything" — the assistant answered and collected all four fields correctly, but nothing reached our webhook meaningfully.
+- Diagnosed methodically rather than guessing at each report: checked Vercel runtime logs first (found a flood of `conversation-update`-style hits during the live call — proof the webhook wiring itself was fine — but nothing distinct afterward, and no DB row). Ruled out the "Server Messages" checklist hypothesis (end-of-call-report was already enabled) and the draft-vs-published hypothesis (Steven confirmed publishing) before landing on the real cause.
+- The real cause, found by having Steven screenshot the call's own tabs in the Vapi dashboard: the assistant uses Vapi's **Structured Outputs** feature — a distinct, newer mechanism from the `analysisPlan.structuredDataSchema` this build was originally written against (confirmed empty — "Analysis: Data: N/A" — while "Structured Outputs" showed the correctly extracted fields). Researched Vapi's docs and community posts: Structured Outputs are computed by a separate LLM call *after* `end-of-call-report` fires, and are never included in that webhook payload — they must be fetched via `GET https://api.vapi.ai/call/{id}`, reading `artifact.structuredOutputs`. This reverses an earlier claim in this repo's own spec/handover that Vapi's API key wasn't needed — it is, for this.
+- Fetched the real call's full ID via Vapi's list-calls API and its structured outputs directly via curl to confirm the exact field shape before writing any code against it (`result` is a JSON-encoded string, not a plain object).
+- Rewrote `lib/vapi.ts`: replaced the dead `analysis.structuredData` reader with `fetchStructuredOutputs()` — polls the Call API with retries (extraction takes a few seconds), handles the string-encoded result. Updated `route.ts` to call it instead.
+- Verified the fix against ground truth, not a synthetic payload: ran the actual shipped `fetchStructuredOutputs()` + `extractFields()` against the real call ID and got back the exact fields Vapi's dashboard showed. Then fed that same real call ID through the full local route as a synthetic `end-of-call-report` — confirmed a correct DB row, and Steven confirmed the Slack card and SMS both landed (Slack required a manual refresh on his end — no push notification fired, which is a Slack per-channel notification-settings matter, unrelated to this code). Test row deleted afterward.
+- Updated the Build 4 spec, HANDOVER, and code comments to correct the record — this was a real design gap in the original build, not a config mistake, and needed documenting as such rather than glossed over.
+
+**Verified:** the fix is proven correct against real call data, end to end (DB, Slack, SMS). **Not yet verified:** a real call working fully live in production — `VAPI_API_KEY` is local-only so far and still needs adding to Vercel.
+
+---
+
 ## 2026-08-28 — Build 4 fully verified in production; only a real phone call remains
 
 **Phase:** Build 4, general-enquiries branch — closing out production configuration

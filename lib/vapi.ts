@@ -2,24 +2,25 @@ import { createHmac, timingSafeEqual } from "crypto";
 import type { Urgency } from "@/config/client";
 
 /**
- * Vapi's webhook message shapes, per docs.vapi.ai/server-url/events and
- * docs.vapi.ai/assistants/call-analysis. Two mechanisms can deliver the
- * fields the assistant collected:
+ * Vapi's webhook message shapes, per docs.vapi.ai/server-url/events.
+ * Two mechanisms can deliver the fields the assistant collected:
  *
  * - "tool-calls": fires mid-call if the assistant has a custom Tool
- *   attached. Not currently configured on the assistant (checked directly
- *   in the Vapi dashboard) — supported here for if/when one is added.
- * - "end-of-call-report": fires once after the call ends. If the
- *   assistant's Analysis tab has a structuredDataSchema configured, the
- *   extracted fields land in `analysis.structuredData` — either at
- *   message level or nested under message.call, per Vapi's docs (which
- *   don't pin down the exact path) — this reads both. This is the more
- *   likely path for the current setup, since no Tool exists yet.
+ *   attached. Not currently configured on the assistant — supported here
+ *   for if/when one is added.
+ * - "end-of-call-report": fires once after the call ends, but does NOT
+ *   itself carry the extracted fields. The assistant here uses Vapi's
+ *   "Structured Outputs" feature (confirmed directly in the dashboard —
+ *   a distinct, newer mechanism from the older analysisPlan.structuredDataSchema
+ *   this code originally assumed), which computes results via a separate
+ *   LLM call *after* the report fires and is never included in the
+ *   webhook payload — Vapi's own docs confirm this. It has to be fetched
+ *   via `GET /call/{id}` afterward — see fetchStructuredOutputs() below.
  *
  * Parameter/schema key names (name/phone/postcode/description/timeframe)
- * are our best guess matching the assistant's current system prompt —
- * confirm against the actual Analysis tab schema before the first live
- * test and adjust extractFields() if they differ.
+ * matched what the assistant actually sent on a real test call
+ * (2026-08-28) — name, phone, postcode, description confirmed; timeframe
+ * not yet asked by the assistant.
  */
 export interface VapiWebhookMessage {
   message: {
@@ -28,9 +29,7 @@ export interface VapiWebhookMessage {
       id?: string;
       assistantId?: string;
       customer?: { number?: string };
-      analysis?: { structuredData?: Record<string, unknown> };
     };
-    analysis?: { structuredData?: Record<string, unknown> };
     toolCallList?: Array<{
       id: string;
       name: string;
@@ -39,11 +38,53 @@ export interface VapiWebhookMessage {
   };
 }
 
-/** Pulls whichever structuredData object is present, checking both plausible locations. */
-export function extractStructuredData(
-  message: VapiWebhookMessage["message"],
-): Record<string, unknown> | undefined {
-  return message.analysis?.structuredData ?? message.call?.analysis?.structuredData;
+/**
+ * Structured Outputs are computed asynchronously after end-of-call-report
+ * fires, so this polls Vapi's Call API with a few retries rather than a
+ * single fixed wait. Returns the first output's parsed result, or null if
+ * none is ready within the retry budget, VAPI_API_KEY isn't set, or the
+ * call has no structured outputs attached.
+ */
+export async function fetchStructuredOutputs(
+  callId: string,
+  { retries = 3, delayMs = 4000 }: { retries?: number; delayMs?: number } = {},
+): Promise<Record<string, unknown> | null> {
+  const apiKey = process.env.VAPI_API_KEY;
+  if (!apiKey) return null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    const response = await fetch(`https://api.vapi.ai/call/${callId}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!response.ok) continue;
+
+    const data = (await response.json()) as {
+      artifact?: { structuredOutputs?: Record<string, { name?: string; result?: unknown }> };
+    };
+    const outputs = data.artifact?.structuredOutputs;
+    if (!outputs) continue;
+
+    const entries = Object.values(outputs);
+    if (entries.length === 0) continue;
+
+    const raw = entries[0].result;
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        continue;
+      }
+    }
+    if (raw && typeof raw === "object") {
+      return raw as Record<string, unknown>;
+    }
+  }
+
+  return null;
 }
 
 export interface VoiceIntakeFields {
