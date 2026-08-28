@@ -41,12 +41,13 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
+3. **Build 4 (missed call / voicemail AI intake) is now scoped** — see `docs/design/specs/build-4-missed-call-voicemail-intake.md` and `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md`. Blocked on Steven provisioning a Vapi account and phone number (spec §11); the only piece of this build that could be done ahead of that is adding `callbackWindowMinutes` to `config/client.ts` (spec §4) and wiring the web form's hardcoded "45-minute callback" badge to read from it instead.
 
 ## Open questions (not blockers, tracked from the spec §12)
 
-- Processor status / GDPR posture for photo (and later voice note) data — must be settled before Build 2, not Build 1. The photo-URL access-model discussion this session is directly relevant here.
-- SMS response-window commitment for Build 2 — needs Steven's honest worst case.
-- CLIENT_ALPHA's actual call volume / substrate — a conversation with the client, not a build task.
+- Processor status / GDPR posture for photo (and later voice note / call) data — must be settled before Build 2 and before Build 4 goes live with a real client. The photo-URL access-model discussion this session is directly relevant here; Build 4's spec §10.4 sharpens it further (live phone numbers through a third party, Vapi).
+- SMS response-window commitment for Build 2 — needs Steven's honest worst case. Build 4 also needs an SMS provider decision (spec §10.2) and, per Steven, an "already agreed" acknowledgment-text principle from a Build 2 discussion that isn't captured anywhere in this repo yet (spec §10.7) — needs Steven to either restate it or confirm Build 4 should define its own.
+- CLIENT_ALPHA's actual call volume / substrate — a conversation with the client, not a build task. Also now needed to size Build 4's actual monthly Vapi cost (~30¢/min all-in, per the decision doc).
 
 ## Decisions made so far
 
@@ -56,5 +57,6 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - Hosting: Vercel (Hobby plan for now — non-commercial license note applies at go-live).
 - GitHub repo: private.
 - DB driver: `@neondatabase/serverless`, not `pg`.
-- Form design: functional-first, styling deliberately minimal — Steven's explicit call, revisit later.
+- Form design: functionality-first was the initial call; a real visual styling pass has since landed (color palette, gradient hero, light-blue card) per Steven's request.
 - `/api/enquiry` accepts multipart/form-data, not JSON, as of Step 9.
+- Build 4 (missed call/voicemail AI intake): use Vapi short-term to ship quickly, build the Twilio-based self-hosted equivalent independently in parallel for long-term ownership. Full rationale in the decision doc linked above.

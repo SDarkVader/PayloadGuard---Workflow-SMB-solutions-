@@ -17,6 +17,20 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — Build 4 scoped: missed call / voicemail AI intake
+
+**Phase:** scoping, no build-order step — no code changed
+
+- Steven provided a detailed scoping note for a fourth build: an AI voice intake that picks up unanswered calls (after the normal ring, no AI while it's actively ringing), greets naturally, branches into new-enquiry / existing-customer / something-else, and for new enquiries collects the same field set as the Build 1 web form, then posts the same-shaped Slack card (tagged as phone-sourced) and sends a confirmation SMS. Decision already made in the note: use Vapi (managed voice orchestration) short-term to ship quickly, build a Twilio-based self-hosted equivalent independently in parallel for long-term ownership — consistent with this engagement's general preference for owned infrastructure over indefinite subscriptions.
+- His own next-step #1 asked me to confirm how this slots into the existing repo. Reviewed `lib/db.ts`, `lib/slack.ts`, `db/schema.sql`, and `config/client.ts` against the new requirements: the `enquiries` table's `source` column, `insertEnquiry()`, and `buildSlackMessage()` are all already channel-agnostic and need no schema or logic changes — this build only needs a new route (`/api/voice-intake`), a new `lib/sms.ts` (same never-throws pattern as `lib/slack.ts`), and a new `lib/vapi.ts` to map Vapi's webhook payload onto the existing `EnquiryInput`/`SlackEnquiryPayload` shapes. **Recommendation: same repo, new route, not a separate service** — Vapi owns all the real-time audio infrastructure; this repo only ever receives a structured webhook once Vapi has already done the hard part, which is exactly what the existing Vercel serverless functions already do for `/api/enquiry`.
+- Wrote this up as `docs/design/specs/build-4-missed-call-voicemail-intake.md` (pseudonymized, mirrors the Build 1 spec's structure) and `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md` (the Vapi-vs-self-build call, with the cost figures from Steven's note — ~5¢/min Vapi platform fee, ~30¢/min realistic all-in). Registered both in `docs/design/INDEX.md`, which also got its stale Build 1 status line corrected (it still read "Phase 0 — repo scaffold only," long out of date).
+- **Found and flagged, not fixed:** the web form's "45-minute callback" badge (`app/page.tsx`) is hardcoded in JSX rather than reading from `config/client.ts` — a real gap now that Build 4 needs the same number in three places (spoken greeting, confirmation SMS, web badge) without drift. Proposed a `callbackWindowMinutes` config field in the spec; left unbuilt pending Steven's confirmation, since it's a small independent change that doesn't need Vapi to exist first.
+- Deliberately did not resolve several open questions rather than guessing: SMS provider, whether to retain call recordings/transcripts (data-handling stance in Steven's own note suggests no, but that's his call), what the placeholder existing-customer/something-else branches should actually do in v1, the real (non-45-minute) callback commitment, and a "Build 2 acknowledgment-text principle" Steven's note references that isn't captured anywhere in this repo — flagged for him to either restate or confirm Build 4 should define its own. All logged as open questions in the new spec, §10.
+
+**Verified:** N/A — documentation only, no code or infrastructure changed. Nothing to test yet; blocked on Steven provisioning a Vapi account and phone number before any code gets written (spec §11).
+
+---
+
 ## 2026-08-27 — Slack message: every field explicitly labeled
 
 **Phase:** Slack notification quality, no build-order step

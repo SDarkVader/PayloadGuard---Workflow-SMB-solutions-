@@ -12,9 +12,10 @@ One page, always current. This is the map — read this to see what exists and i
 
 | Build | Spec | Status |
 |---|---|---|
-| 1 | [`specs/build-1-enquiry-capture-pipeline.md`](./specs/build-1-enquiry-capture-pipeline.md) | Active. Not yet built (Phase 0 — repo scaffold only). |
-| 2 | On-site capture (voice notes) | Not written yet. |
+| 1 | [`specs/build-1-enquiry-capture-pipeline.md`](./specs/build-1-enquiry-capture-pipeline.md) | **Live in production.** Core loop (Steps 1–9) complete and verified — see `HANDOVER.md`. Spec's §10 checklist not yet run as a formal pass. |
+| 2 | On-site capture (voice notes) | Not written yet. Note: Steven has referenced an "already agreed" acknowledgment-text principle for this build in discussion — not yet captured in this repo, see Build 4 spec §10.7. |
 | 3 | Scheduled reminders | Not written yet. |
+| 4 | [`specs/build-4-missed-call-voicemail-intake.md`](./specs/build-4-missed-call-voicemail-intake.md) | Scoping only. Blocked on Vapi account/number provisioning — see spec §11. |
 
 ## Addenda log
 
