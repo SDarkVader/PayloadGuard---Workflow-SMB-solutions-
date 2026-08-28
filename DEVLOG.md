@@ -17,6 +17,19 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Build 4 general-enquiries branch confirmed with a real phone number, end to end
+
+**Phase:** Build 4, general-enquiries branch — final confirmation
+
+- Steven placed a third real test call, this time to himself with a genuine phone number rather than made-up test details.
+- All three channels confirmed correct via screenshots: DB row and Slack card with the right fields (name, postcode, job type default, urgency default, description), and — the piece the previous two real calls couldn't fully prove — the confirmation SMS actually delivered and readable on a real phone.
+- Test row deleted afterward, consistent with every prior test in this build.
+- This closes out Build 4's general-enquiries branch: three real calls in a row surfaced two genuine bugs (async Structured Outputs not in the webhook payload; SMS phone numbers needing E.164 normalization), both fixed and now proven, and this final call confirms the whole path works with no synthetic or replayed data anywhere in the loop.
+
+**Verified:** full real-call, real-number, real-delivery confirmation — DB, Slack, SMS.
+
+---
+
 ## 2026-08-28 — First fresh real call: DB/Slack correct, SMS format bug found and fixed
 
 **Phase:** Build 4, general-enquiries branch — first genuinely fresh real call (not a replay)
