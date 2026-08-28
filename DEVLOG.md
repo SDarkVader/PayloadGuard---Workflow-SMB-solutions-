@@ -17,6 +17,18 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-27 — callbackWindowMinutes added to config
+
+**Phase:** small fix flagged in the Build 4 spec, done ahead of the rest of that build
+
+- `config/client.ts`: added `callbackWindowMinutes: 45` to `ClientConfig`/`activeClient`, with a comment noting it's an unvalidated placeholder, not a confirmed commitment.
+- `app/page.tsx`: the hero badge now reads `activeClient.callbackWindowMinutes` instead of a hardcoded `"45-minute callback"` string — closes the gap flagged while scoping Build 4 (spec §4), where the same number will also need to drive the Vapi greeting and confirmation SMS once those exist.
+- Verified: clean `npm run build`, then confirmed via `curl` against `next start` that the rendered page's React payload carries the interpolated number (`["⏱ ", 45, "-minute callback..."]`) rather than a literal string — proof it's actually coming from config, not just visually identical.
+
+**Verified:** build clean, config wiring confirmed via the rendered page's own payload.
+
+---
+
 ## 2026-08-27 — Build 4 scoped: missed call / voicemail AI intake
 
 **Phase:** scoping, no build-order step — no code changed

@@ -30,6 +30,8 @@ export interface ClientConfig {
   businessName: string;
   region: string;
   trade: string;
+  /** Not validated with the client — an arbitrary starting value to test against. */
+  callbackWindowMinutes: number;
   jobTypes: Record<JobType, string>;
   urgencyLabels: Record<Urgency, string>;
 }
@@ -39,6 +41,7 @@ export const activeClient: ClientConfig = {
   businessName: "CLIENT_ALPHA",
   region: "Aberdeen",
   trade: "roofing",
+  callbackWindowMinutes: 45,
   jobTypes: {
     roof_repair: "Roof repair",
     roof_replacement: "New roof / replacement",

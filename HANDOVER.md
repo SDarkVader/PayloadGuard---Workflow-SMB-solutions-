@@ -27,7 +27,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 ## What exists
 
-- `app/page.tsx` — gradient hero header (headline + "45-minute callback, with text updates" badge) above the real `EnquiryForm`.
+- `app/page.tsx` — gradient hero header (headline + callback-window badge, reading `activeClient.callbackWindowMinutes` from config, not hardcoded) above the real `EnquiryForm`.
 - `components/EnquiryForm.tsx` — full form incl. `PhotoInput`, submits `FormData` (not JSON).
 - `components/PhotoInput.tsx` — big dashed-border "Add photos" button (hidden native input under a styled label), client-side compression (canvas, 1600px/quality 0.8), max 4, preview + remove.
 - `app/globals.css` — styled pass: color palette (blue/orange), gradient hero banner, light-blue form card with colored top accent and white entry fields, colored focus states, urgency options highlight when selected. Purely visual — no behavior changed.
@@ -41,7 +41,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
-3. **Build 4 (missed call / voicemail AI intake) is now scoped** — see `docs/design/specs/build-4-missed-call-voicemail-intake.md` and `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md`. Blocked on Steven provisioning a Vapi account and phone number (spec §11); the only piece of this build that could be done ahead of that is adding `callbackWindowMinutes` to `config/client.ts` (spec §4) and wiring the web form's hardcoded "45-minute callback" badge to read from it instead.
+3. **Build 4 (missed call / voicemail AI intake) is now scoped** — see `docs/design/specs/build-4-missed-call-voicemail-intake.md` and `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md`. Blocked on Steven provisioning a Vapi account and phone number (spec §11). `callbackWindowMinutes` has been added to `config/client.ts` and the web form badge now reads from it (done — see devlog); still needed before Build 4 itself can be built: the Vapi assistant's greeting and the confirmation SMS template also need to read this same value once they exist, so all three never drift apart.
 
 ## Open questions (not blockers, tracked from the spec §12)
 

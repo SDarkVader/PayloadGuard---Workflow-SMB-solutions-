@@ -55,14 +55,7 @@ The 45-minute commitment carries over from the web form for consistency, but per
 
 **Existing gap found while reviewing the repo for this spec:** the web form's badge (`app/page.tsx`) currently hardcodes the string `"45-minute callback, with text updates"` directly in JSX — it does not read from `config/client.ts`. That's a pre-existing violation of core principle #3 (config-per-client, logic-shared), not something this build introduces, but this build makes it load-bearing: the same number needs to appear in the AI's spoken greeting, the confirmation SMS, and the web form badge, and it cannot drift between the three.
 
-**Proposed fix, to land before or alongside this build:**
-
-```ts
-// config/client.ts
-callbackWindowMinutes: 45,
-```
-
-— read by the web form badge, the Vapi assistant's system prompt/greeting template, and the SMS confirmation template. This is a small, low-risk change independent of Vapi setup and could be done now if you want it done ahead of the rest of this build.
+**Done (2026-08-27):** `callbackWindowMinutes: 45` added to `config/client.ts`, and the web form's hero badge now reads `activeClient.callbackWindowMinutes` instead of a hardcoded string. Still outstanding: once the Vapi assistant and SMS confirmation exist, their greeting/template copy must read this same value rather than hardcoding it again — this fix only covers the one place that existed before this build was scoped.
 
 ## 5. Slack message format
 
@@ -139,7 +132,7 @@ Recorded in full in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-
 2. **SMS provider.** Not yet chosen. Twilio is the obvious default (also under consideration for the long-term self-built voice path) but that's a separate decision from voice orchestration.
 3. **Call recording / transcript retention.** Vapi can typically provide a recording and/or transcript of the call. Steven's note doesn't ask for these to be stored, only for the structured fields extracted from them. Given the "Data handling" stance in the scoping note (customer data beyond what's needed to operate the tool requires specific consent and specific use cases, not default collection), the default here should probably be **don't store the raw recording or full transcript**, only the structured fields — but that's your call to confirm, not mine to assume.
 4. **Processor status / data residency.** Build 1's spec already flagged this as unresolved before Build 2 (§12.1 of that spec): whose infrastructure holds customer data, and under what legal basis. This build makes it sharper — live phone numbers and spoken details flowing through Vapi (a third party) before they ever reach our Postgres. Needs resolving before this goes live with a real client, not before it's prototyped on Steven's own line.
-5. **Real callback-window number.** 45 minutes is explicitly a placeholder to test against, not validated with CLIENT_ALPHA_CONTACT.
+5. **Real callback-window number.** 45 minutes (now in `config/client.ts` as `callbackWindowMinutes`) is explicitly a placeholder to test against, not validated with CLIENT_ALPHA_CONTACT.
 6. **Cost to CLIENT_ALPHA, if any.** Explicitly deferred in Steven's note, to be addressed separately from the technical build.
 7. **The Build 2 "acknowledgment text principle."** Steven's note references a principle "already agreed for build 2, on-site capture" for the confirmation-SMS wording. There is no Build 2 spec or decision doc in this repo yet — `docs/design/INDEX.md` lists Build 2 as "Not written yet." This build's SMS copy (§6) is being scoped without that reference. Flagging rather than guessing at content that hasn't been captured anywhere.
 
