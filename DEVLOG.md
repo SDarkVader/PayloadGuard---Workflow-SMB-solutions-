@@ -27,7 +27,7 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 - Added `toE164()` to `lib/sms.ts`: reformats a leading `0` to `+44`, passes through anything already starting with `+`, strips non-digit characters otherwise. Deliberately only reformats — never fabricates missing digits, so a genuinely incomplete number still correctly fails at Twilio rather than silently succeeding against the wrong recipient. Verified against real formats (UK local with a space, UK local without, and already-E.164) via the actual shipped function.
 - Also improved the Twilio failure log to include the response body, not just the status code, so a future SMS failure is diagnosable from the log line alone rather than needing another round of log-digging.
 
-**Verified:** `toE164()` output confirmed correct for the formats a caller or the web form would realistically produce. Not yet re-tested against a real call with a genuine (complete) UK mobile number — the next real call with a properly working test number will confirm the fix end-to-end.
+**Verified:** `toE164()` output confirmed correct for the formats a caller or the web form would realistically produce. A second real call (also fake test details) confirmed the fix directly against Twilio's own message log: the number arrived correctly normalized to E.164 (vs raw UK local format before the fix), and Twilio accepted the send — it came back `undelivered` (error 30003, "Unreachable destination handset"), which is Twilio saying that specific fake number isn't a real handset, not a code issue. SMS delivery to a genuine number was already separately confirmed multiple times earlier in this build with a real phone.
 
 ---
 
