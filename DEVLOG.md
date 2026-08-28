@@ -17,6 +17,20 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — First fresh real call: DB/Slack correct, SMS format bug found and fixed
+
+**Phase:** Build 4, general-enquiries branch — first genuinely fresh real call (not a replay)
+
+- Steven placed a real call (a family member, using made-up test details). DB row and Slack card both landed correctly. SMS did not.
+- Diagnosed via Vercel's runtime logs rather than guessing: `Confirmation SMS failed ...: Twilio responded 400`. The caller's phone came through in UK local format (leading `0`), not the E.164 (`+44...`) Twilio's API requires for the `To` field, and `sendConfirmationSms()` was passing whatever format it received straight through unmodified.
+- Steven confirmed the number was also a made-up test one, short a digit for a real UK mobile — so this specific 400 would likely have failed regardless. But the format gap is real and would affect genuine callers too, since a normal `07...` number would have failed the same way before this fix.
+- Added `toE164()` to `lib/sms.ts`: reformats a leading `0` to `+44`, passes through anything already starting with `+`, strips non-digit characters otherwise. Deliberately only reformats — never fabricates missing digits, so a genuinely incomplete number still correctly fails at Twilio rather than silently succeeding against the wrong recipient. Verified against real formats (UK local with a space, UK local without, and already-E.164) via the actual shipped function.
+- Also improved the Twilio failure log to include the response body, not just the status code, so a future SMS failure is diagnosable from the log line alone rather than needing another round of log-digging.
+
+**Verified:** `toE164()` output confirmed correct for the formats a caller or the web form would realistically produce. Not yet re-tested against a real call with a genuine (complete) UK mobile number — the next real call with a properly working test number will confirm the fix end-to-end.
+
+---
+
 ## 2026-08-28 — Build 4 general-enquiries voice intake confirmed fully working in production
 
 **Phase:** Build 4, general-enquiries branch — closing the loop

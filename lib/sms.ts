@@ -10,12 +10,24 @@ function buildConfirmationText(payload: SmsConfirmationPayload): string {
 }
 
 /**
- * Not wired to a real provider yet — no SMS_PROVIDER/Twilio credentials
- * exist. Same never-throws pattern as postToSlack: a failure or missing
- * config here must never fail the enquiry, since the DB write and Slack
- * post are what actually matter. See docs/design/specs/
- * build-4-missed-call-voicemail-intake.md §10.2 for the open provider
- * decision.
+ * Twilio's API requires E.164 ("+44...") for the To field, but phone
+ * numbers arrive from the caller (spoken, transcribed) or the web form in
+ * whatever format they were given — commonly UK local format ("07...").
+ * Only reformats; never fabricates missing digits, so a mistranscribed
+ * number (too short/long) still fails at Twilio, which is correct — this
+ * just stops well-formed local numbers from failing on format alone.
+ */
+export function toE164(rawPhone: string): string {
+  const digitsOnly = rawPhone.replace(/[^\d+]/g, "");
+  if (digitsOnly.startsWith("+")) return digitsOnly;
+  if (digitsOnly.startsWith("0")) return `+44${digitsOnly.slice(1)}`;
+  return digitsOnly;
+}
+
+/**
+ * Same never-throws pattern as postToSlack: a failure or missing config
+ * here must never fail the enquiry, since the DB write and Slack post are
+ * what actually matter.
  */
 export async function sendConfirmationSms(
   payload: SmsConfirmationPayload,
@@ -38,7 +50,7 @@ export async function sendConfirmationSms(
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
-          To: payload.phone,
+          To: toE164(payload.phone),
           From: fromNumber,
           Body: buildConfirmationText(payload),
         }),
@@ -46,7 +58,8 @@ export async function sendConfirmationSms(
     );
 
     if (!response.ok) {
-      return { ok: false, error: `Twilio responded ${response.status}` };
+      const body = await response.text().catch(() => "");
+      return { ok: false, error: `Twilio responded ${response.status}: ${body}` };
     }
     return { ok: true };
   } catch (error) {
