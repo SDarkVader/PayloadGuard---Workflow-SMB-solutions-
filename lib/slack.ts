@@ -11,6 +11,8 @@ export interface SlackEnquiryPayload {
   urgency: Urgency;
   message?: string;
   photoUrls?: string[];
+  /** Display label for a non-web-form source, e.g. "Phone call". Omitted for the web form — no change to its verified output. */
+  channel?: string;
 }
 
 function buildSlackMessage(payload: SlackEnquiryPayload) {
@@ -29,6 +31,7 @@ function buildSlackMessage(payload: SlackEnquiryPayload) {
   bodyLines.push(`*Job type:* ${jobTypeLabel}`);
   bodyLines.push(`*Urgency:* ${urgencyLabel}`);
   if (payload.message) bodyLines.push(`*Message:* ${payload.message}`);
+  if (payload.channel) bodyLines.push(`*Source:* ${payload.channel}`);
 
   const footer = `Enquiry ${payload.id} · ${payload.createdAt.toISOString()}`;
 

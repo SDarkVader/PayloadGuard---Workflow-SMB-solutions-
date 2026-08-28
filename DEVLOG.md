@@ -17,6 +17,26 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Build 4 general-enquiries voice intake built and verified against synthetic payloads
+
+**Phase:** Build 4, general-enquiries branch (spec: `docs/design/specs/build-4-missed-call-voicemail-intake.md`)
+
+- Steven provided a real Vapi Assistant ID and a Private API Key directly in chat. Flagged the exposure and recommended rotation once done — Steven confirmed this is his normal workflow (use keys for setup, rotate before real deployment). Established this route doesn't actually need the API key at all — it only ever receives from Vapi, never calls out to it — so nothing was stored anywhere for this build.
+- Researched Vapi's actual webhook payload shapes (docs.vapi.ai/server-url/events, /assistants/call-analysis, plus community posts on signature verification, since the official docs don't fully specify it) rather than guessing — confirmed two possible delivery mechanisms: a mid-call `tool-calls` message (requires a custom Tool attached to the assistant) and a post-call `end-of-call-report` with `analysis.structuredData` (requires an Analysis-tab schema, no Tool needed).
+- Steven shared a screenshot of the actual live assistant config: system prompt confirms it currently collects exactly four fields — name, phone, postcode, description — no job type, no urgency/timing question yet, and no custom Tool visible. This settled which mechanism is actually in play (`end-of-call-report`, not `tool-calls`) and confirmed job_type/urgency need graceful defaults, not hard requirements.
+- Asked Steven directly how to handle the missing job_type/urgency fields and who sends the confirmation SMS, since both were genuine blockers (business-logic judgment call on the former, missing credentials on the latter) rather than guessable details. His answer: this route is general-enquiries only (a separate "Emergency calls" route with similar-but-immediate logic is coming, built by him directly in Vapi); he's adding a timeframe/timing question to this assistant next so urgency can be judged from the caller's own words about scheduling, not a rigid category.
+- Built accordingly:
+  - `lib/vapi.ts` — parses either message shape, `mapTimeframeToUrgency()` (keyword heuristic onto the existing urgent/this_week/quote_only enum, defaults to this_week, always preserves the raw timeframe text in the message field so nothing is silently lost to a bad bucket), HMAC-SHA256 signature verification (skips gracefully if `VAPI_WEBHOOK_SECRET` isn't set), a lightweight assistant-ID sanity check.
+  - `lib/sms.ts` — confirmation SMS via Twilio's REST API directly (no extra dependency), same never-throws pattern as `lib/slack.ts`; returns a clear "not configured" result until `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` exist. Asked Steven what's needed for this and suggested checking whether Vapi's number is already Twilio-backed and SMS-capable before provisioning a separate sender.
+  - `lib/slack.ts` — added one optional `channel` field, rendered as `*Source:* {value}` only when present, so Build 1's already-verified production output is unchanged.
+  - `app/api/voice-intake/route.ts` — ties it together: signature check → dedupe → insert (`source: "call"`, `job_type: "other"` default) → Slack (tagged "Phone call") → SMS attempt, handling both message shapes.
+- Verified locally (Slack and Postgres both work against `next start` without needing Vapi's OIDC-style access, unlike Blob) with a synthetic `end-of-call-report` payload: correct DB row (`source: "call"`, `job_type: "other"`, `urgency: "this_week"` default, description populated), Slack card confirmed live and correctly formatted by Steven via screenshot including the new `Source: Phone call` line. Also tested: an identical retry correctly deduped (no second row, no second Slack post), a payload missing name/phone correctly no-op'd. One test accidentally exercised the "wrong assistant" case with placeholder data since `VAPI_ASSISTANT_ID` wasn't set locally (check skips gracefully when unset, as designed) — this posted a real card with fake data ("Test") to the production Slack channel; both test DB rows deleted afterward.
+- Updated the Build 4 spec throughout to reflect what's actually built vs. what was originally proposed (`source: "call"` per Steven's explicit instruction, not the `missed_call_ai_intake` value the spec originally guessed at; the routing model's evolution into General enquiries / Business queries / Emergency calls).
+
+**Verified:** build clean, full round-trip against a synthetic payload (DB + Slack + dedupe + missing-fields handling) confirmed both programmatically and by Steven directly in Slack. **Not yet verified:** anything from an actual phone call — no Tool or Analysis-tab schema is configured on the Vapi side yet, and no Server URL points at this route. See spec §11.
+
+---
+
 ## 2026-08-27 — callbackWindowMinutes added to config
 
 **Phase:** small fix flagged in the Build 4 spec, done ahead of the rest of that build

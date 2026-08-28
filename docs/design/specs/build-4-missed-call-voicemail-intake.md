@@ -4,7 +4,7 @@
 
 **Purpose:** Turn an inbound phone call that goes unanswered into the same kind of structured Slack lead Build 1 produces from the web form — via an AI voice intake that picks up after the normal ring, not a traditional voicemail beep.
 
-**Status:** Scoping only. This document formalizes Steven's scoping note (2026-08-27) into the repo's spec format. Not yet built — no Vapi account, phone number, or SMS provider exists yet. See §11 for what has to happen before Claude Code can start building.
+**Status:** General-enquiries branch built and verified locally against synthetic Vapi payloads (2026-08-28) — `/api/voice-intake` is live in this repo, not yet confirmed against a real phone call. SMS confirmation is coded but stubbed (no provider configured). Emergency-branch routing is a separate, later piece — not this route. See §11 for what's still needed before a real end-to-end call can be tested.
 
 **Depends on:** Build 1's pipeline (live) — this build reuses its DB table, its Slack message builder, and its config pattern rather than creating parallel ones.
 
@@ -20,34 +20,31 @@ Single-phone-line trades business. The owner is routinely unreachable — up a r
 1. Call rings through normally for the standard duration — no AI involvement while the phone is actively ringing, in case someone is free to answer live.
 2. If unanswered, the call falls through to an AI voice intake — not "please leave a message after the tone." The transition from ringing to the AI should feel like a continuous, attended experience, not a beep.
 3. The AI opens with a warm, natural-sounding greeting — explicitly not robotic or call-center sounding. Rough shape: identifies as CLIENT_ALPHA, apologises for missing the call, states the callback window commitment (§4 — must be config-driven, not hardcoded), moves straight into taking details.
-4. The AI asks a small number of branching questions to route the call, kept deliberately simple for v1:
-   - **New job enquiry** — fully scoped below (§3).
-   - **Existing customer / follow-up on an existing job** — placeholder only, see §10 open question.
-   - **Something else** — catch-all, placeholder only, see §10 open question.
-5. New-job-enquiry branch collects the same fields as the web form, so both channels produce identically shaped leads (§3).
+4. The AI asks a small number of branching questions to route the call. This has evolved from the original three-way split into three named routes Steven is building directly in Vapi: **General enquiries** (this route — the one built and described below), **Business / existing-customer queries**, and **Emergency calls** (separate, similar-but-immediate logic, its own route/assistant, not built here — see §10.1).
+5. The general-enquiries assistant currently collects four fields (confirmed directly from its live system prompt in the Vapi dashboard): name, phone, postcode, and a description of the problem. It does **not** yet ask about job type or timing/urgency — Steven is adding that next. This route was built to degrade gracefully in that gap (§3).
 6. On completion: a structured Slack card posts to the same channel as Build 1, same visual format, clearly tagged as having come in by phone rather than the web form (§5). A confirmation SMS goes back to the caller summarising what was taken down, so they know they've been heard rather than left in a void.
 
 ## 3. Data schema
 
-**Reuses the existing `enquiries` table as-is — no new columns.** Every field the AI collects maps directly onto Build 1's schema:
+**Reuses the existing `enquiries` table as-is — no new columns needed, none added.**
 
 | Field | Source in this build |
 |---|---|
 | `name` | Asked by the AI |
-| `phone` | Caller ID (the number that called), confirmed verbally if unclear |
-| `email` | Asked, optional — same as web form |
-| `postcode` | Asked, optional — same as web form |
-| `job_type` | Same 7-value enum as the web form (`config/client.ts`) — the AI must map the caller's own words onto one of these, not invent new categories |
-| `urgency` | Same 3-value enum — the AI must map onto `urgent` / `this_week` / `quote_only` |
-| `message` | Free-text description of the problem, same as web form's `message` |
+| `phone` | From the assistant's collected field, falling back to the caller-ID number (`call.customer.number`) if that's missing |
+| `email` | Not currently asked by this assistant — stays empty |
+| `postcode` | Asked by the AI |
+| `job_type` | **Defaults to `"other"`.** The current assistant doesn't ask about job type at all (confirmed from its live system prompt) — it only collects name/phone/postcode/description. Visible on the Slack card as "Job type: Something else" alongside the raw description, so a human isn't misled into thinking it was actually classified. |
+| `urgency` | **Derived, not asked directly.** The assistant doesn't collect urgency yet either. `lib/vapi.ts`'s `mapTimeframeToUrgency()` accepts an optional `timeframe` field (for when Steven adds the timing question he described) and keyword-maps it onto the existing 3-value enum; defaults to `"this_week"` when no timeframe is present, as a safe middle ground. The raw timeframe text, once collected, is always appended to `message` too — CLIENT_ALPHA_CONTACT sees the caller's actual words, not just the bucketed guess. |
+| `message` | The description field, with `Timeframe given: ...` appended when present |
 | `photo_urls` | Not applicable to this channel — stays `{}` |
-| `source` | **Proposed:** `missed_call_ai_intake` — distinct from `web_form`. Confirm or rename. |
+| `source` | **`"call"`** — per Steven's explicit instruction, not the `missed_call_ai_intake` this doc originally proposed |
 
-Reusing the table means `lib/db.ts`'s `insertEnquiry()` needs no changes — it already takes `source` as a plain string.
+`lib/db.ts`'s `insertEnquiry()` needed no changes — confirmed by using it unmodified.
 
 ### On "voicemail"
 
-Steven's note titles this "missed call and voicemail intake," but the flow described (§2) never leaves a traditional unstructured voicemail — every unanswered call gets the AI's structured intake instead of a beep. There is no raw audio recording to transcribe after the fact; the AI *is* the intake. Flagging this because it affects the `source` value naming and because it means "voicemail" in the DB/Slack sense should probably read as "missed call," not as a recording — worth confirming that's the intended framing.
+As anticipated in this section's earlier draft: the flow never produces a traditional unstructured voicemail recording. The assistant's structured description *is* the record. `source: "call"` reflects that.
 
 ## 4. The callback window — must be config, not copy
 
@@ -59,36 +56,35 @@ The 45-minute commitment carries over from the web form for consistency, but per
 
 ## 5. Slack message format
 
-Same visual format as Build 1 (§5 of the Build 1 spec), reusing `lib/slack.ts`'s `buildSlackMessage()` unchanged in structure — header line (urgency, job type, postcode), then the labeled field lines added recently (Name, Phone, Email, Postcode, Job type, Urgency, Message), then footer.
-
-**Addition needed:** a way to distinguish this channel from the web form at a glance, per Steven's explicit requirement ("clearly tagged as having come in via missed call... rather than the web form"). Proposed: a `*Source:* Missed call` line in the same labeled-field style as the rest of the body — consistent with the labeling convention just shipped for Build 1, cheap to add, no visual redesign needed. No photo blocks (not applicable to this channel).
+**Built.** `lib/slack.ts`'s `SlackEnquiryPayload` gained one new optional field, `channel?: string`, rendered as a `*Source:* {channel}` line only when present — the web form never sets it, so Build 1's already-verified-in-production output is byte-for-byte unchanged. The voice-intake route passes `channel: "Phone call"`. Verified locally: a synthetic call posted with `Source: Phone call` visible, confirmed by Steven via screenshot against the real Slack channel. No photo blocks (not applicable to this channel).
 
 ## 6. Confirmation SMS
 
-New capability — Build 1 has no SMS sending today. Needs:
-
-- A provider decision (open question, §10 — Twilio is the obvious default since it's already under consideration for the long-term self-built voice path, but that's not yet decided specifically for SMS).
-- A new `lib/sms.ts` module following the same pattern as `lib/slack.ts` and every other notification module in this repo: **never throws**, failure is logged for replay and must never surface to the caller or block the DB write (core principle #1 — the log is the source of truth, notifications are not).
-- A message template pulling `callbackWindowMinutes` from config (§4) and the fields just captured, so the caller sees a concrete summary of what was taken down — mirrors the acknowledgment-text principle referenced from Build 2 in Steven's note. *(That principle isn't captured anywhere in this repo yet — see §10.)*
+**Coded, not yet sending for real.** `lib/sms.ts` follows the same never-throws pattern as `lib/slack.ts`: `sendConfirmationSms()` checks for `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER`, and if any are missing returns `{ ok: false, error: "SMS provider not configured" }` without affecting the DB write or Slack post — confirmed in the local test (logged, didn't block anything). If those env vars are set, it POSTs to Twilio's Messages API directly (basic auth, no extra dependency). Provider is still Steven's call — worth checking first whether the number Vapi calls through is already Twilio-backed and SMS-capable, so the confirmation can come from the same number the caller rang rather than an unrelated one. Message copy pulls `callbackWindowMinutes` from config (§4), not hardcoded.
 
 ## 7. Architecture
 
 ```
 Caller ──(unanswered)──► Vapi (managed telephony + STT/TTS + call orchestration)
                               │
-                              │ webhook (function-call / end-of-call report), HTTPS POST
+                              │ webhook, HTTPS POST — one of two message types (both handled):
+                              │  • end-of-call-report + analysis.structuredData (current setup,
+                              │    no Tool configured on the assistant — this is the live path)
+                              │  • tool-calls (supported for if/when a custom Tool is added)
                               ▼
-                    /api/voice-intake  (new route, same repo)
+                    /api/voice-intake  (built)
                               │
-                              │ 1. validate payload from Vapi
+                              │ 1. verify HMAC signature (skipped gracefully if VAPI_WEBHOOK_SECRET unset)
                               │ 2. dedupe check          ── reuses lib/dedupe.ts
                               │ 3. WRITE LOG              ── reuses lib/db.ts, same `enquiries` table
                               │ 4. post to Slack          ── reuses lib/slack.ts + source tag (§5)
-                              │ 5. send confirmation SMS  ── new lib/sms.ts
-                              │ 6. return 200 to Vapi
+                              │ 5. send confirmation SMS  ── lib/sms.ts (stubbed, §6)
+                              │ 6. return 200 (or a tool result, for the tool-calls path)
                               ▼
                     Same Postgres table, same Slack channel as Build 1
 ```
+
+Verified locally end-to-end against a synthetic `end-of-call-report` payload (since no live call has hit this yet): DB row written with the correct fields and `source: "call"`, Slack card posted and confirmed by Steven via screenshot showing every field plus `Source: Phone call`, a retry with identical data correctly deduped (no second row, no second Slack post), and a payload missing name/phone correctly no-op'd rather than writing a broken row.
 
 **Recommendation: same repo, new route — not a separate service.** Reasoning:
 
@@ -102,25 +98,27 @@ Caller ──(unanswered)──► Vapi (managed telephony + STT/TTS + call orch
 app/
   api/
     voice-intake/
-      route.ts          # NEW — receives Vapi webhooks
+      route.ts          # BUILT — receives Vapi webhooks, both message types
 lib/
-  sms.ts                 # NEW — confirmation SMS, same never-throws pattern as slack.ts
-  vapi.ts                 # NEW — maps Vapi's webhook payload onto EnquiryInput / SlackEnquiryPayload
+  sms.ts                 # BUILT — confirmation SMS, Twilio-shaped, stubbed until credentials exist
+  vapi.ts                 # BUILT — payload parsing, urgency heuristic, signature verification
 config/
-  client.ts               # ADD callbackWindowMinutes (§4)
+  client.ts               # DONE — callbackWindowMinutes added (§4)
 ```
 
-No changes needed to `db/schema.sql`, `lib/db.ts`, or `lib/dedupe.ts` — all already reusable as-is.
+No changes needed to `db/schema.sql`, `lib/db.ts`, or `lib/dedupe.ts` — confirmed by using them unmodified.
 
-### Environment variables (new)
+### Environment variables
 
 ```
-VAPI_API_KEY=
-VAPI_WEBHOOK_SECRET=       # for verifying inbound webhook signatures
-SMS_PROVIDER_...=          # depends on provider decision, §10
+VAPI_WEBHOOK_SECRET=      # optional but recommended — HMAC verification skips gracefully if unset
+VAPI_ASSISTANT_ID=        # optional — lightweight sanity check, skips gracefully if unset
+TWILIO_ACCOUNT_SID=       # for the SMS confirmation to actually send
+TWILIO_AUTH_TOKEN=
+TWILIO_FROM_NUMBER=
 ```
 
-None of these exist yet — no Vapi account or SMS provider has been set up (Steven's own next-step #2).
+None of these are set in production yet. Notably, **no Vapi API key is needed** — this route only ever receives from Vapi, never calls out to it, so nothing needs storing for that. `VAPI_ASSISTANT_ID` isn't a secret (it's an identifier), so it's low-risk to add whenever convenient.
 
 ## 9. Vapi vs. self-built — decision
 
@@ -128,24 +126,23 @@ Recorded in full in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-
 
 ## 10. Open questions — not yet resolved, need Steven's input
 
-1. **Existing-customer and "something else" branches — placeholder behaviour.** Steven's note defers full logic for these, which is fine, but v1 still needs *some* defined behaviour so a call on these branches doesn't silently vanish. Recommend: even the placeholder branches write a minimal log row (at least name + phone + a branch tag) and post a minimal Slack card, so principle #2 ("fail loud only where failure means data loss") holds — a call that isn't a new-job-enquiry shouldn't be a call that leaves no trace at all. This is a recommendation, not a decision — needs your confirmation before it's built this way.
-2. **SMS provider.** Not yet chosen. Twilio is the obvious default (also under consideration for the long-term self-built voice path) but that's a separate decision from voice orchestration.
+1. **Business/existing-customer queries and Emergency-call branches.** Steven is building these as separate routes/assistants in Vapi directly, with the emergency branch needing "similar but immediate logic" — not part of this route or this spec's build. Whether they should also write a minimal trace row (this spec's original recommendation) is still open once those branches actually exist.
+2. **SMS provider.** Not yet chosen — see §6. Twilio is coded and ready; needs credentials, or confirmation that Vapi's own number is already Twilio-backed.
 3. **Call recording / transcript retention.** Vapi can typically provide a recording and/or transcript of the call. Steven's note doesn't ask for these to be stored, only for the structured fields extracted from them. Given the "Data handling" stance in the scoping note (customer data beyond what's needed to operate the tool requires specific consent and specific use cases, not default collection), the default here should probably be **don't store the raw recording or full transcript**, only the structured fields — but that's your call to confirm, not mine to assume.
 4. **Processor status / data residency.** Build 1's spec already flagged this as unresolved before Build 2 (§12.1 of that spec): whose infrastructure holds customer data, and under what legal basis. This build makes it sharper — live phone numbers and spoken details flowing through Vapi (a third party) before they ever reach our Postgres. Needs resolving before this goes live with a real client, not before it's prototyped on Steven's own line.
 5. **Real callback-window number.** 45 minutes (now in `config/client.ts` as `callbackWindowMinutes`) is explicitly a placeholder to test against, not validated with CLIENT_ALPHA_CONTACT.
 6. **Cost to CLIENT_ALPHA, if any.** Explicitly deferred in Steven's note, to be addressed separately from the technical build.
 7. **The Build 2 "acknowledgment text principle."** Steven's note references a principle "already agreed for build 2, on-site capture" for the confirmation-SMS wording. There is no Build 2 spec or decision doc in this repo yet — `docs/design/INDEX.md` lists Build 2 as "Not written yet." This build's SMS copy (§6) is being scoped without that reference. Flagging rather than guessing at content that hasn't been captured anywhere.
 
-## 11. What has to happen before Claude Code can start building
+## 11. What's left before a real call has been proven end-to-end
 
-In order, per Steven's own next-steps list:
-
-1. ~~Confirm repo structure fit~~ — done, this document (§7 gives the recommendation).
-2. Vapi account created, phone number provisioned, basic call flow set up for the new-job-enquiry branch (Steven).
-3. Greeting and branching script copy written and tested for natural, non-robotic delivery.
-4. Then Claude Code can build `/api/voice-intake`, `lib/vapi.ts`, `lib/sms.ts`, and the config addition (§4, §8), against a real Vapi webhook payload rather than a guessed one.
-
-Nothing in this repo needs to change to prepare for step 2 — the config addition in §4 is the only piece that could reasonably be done ahead of Vapi setup.
+1. ~~Confirm repo structure fit~~ — done.
+2. ~~Build `/api/voice-intake`, `lib/vapi.ts`, `lib/sms.ts`, config addition~~ — done, verified against synthetic payloads (§7).
+3. **Configure Vapi to actually call the webhook.** Nothing sends data to `/api/voice-intake` yet — the live assistant has no Server URL pointed at it. Needs, in the Vapi dashboard: an Analysis-tab structured data schema matching name/phone/postcode/description (and timeframe, once that question exists), and a Server URL set to the deployed `/api/voice-intake` URL once this branch is pushed and live on Vercel.
+4. **Confirm the exact field/schema key names** match what `lib/vapi.ts`'s `extractFields()` expects — built against a best guess from the live system prompt, not the actual Analysis-tab schema (which doesn't exist yet).
+5. **A real end-to-end test call** — ring the number, let it go unanswered, confirm the Slack card and DB row land correctly from an actual call rather than a synthetic payload.
+6. Add the timing/urgency question to the assistant's system prompt (Steven's stated next step for the agent itself) and confirm `mapTimeframeToUrgency()`'s keyword heuristic actually fits the real wording once it exists.
+7. SMS provider decision (§6, §10.2).
 
 ## 12. What's out of scope for v1 (from Steven's note)
 

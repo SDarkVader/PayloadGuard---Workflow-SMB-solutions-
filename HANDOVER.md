@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-27 (Build 1's core loop, Steps 1–9, functionally complete and verified; form given a visual styling pass)
+**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake built and verified against synthetic payloads, not yet a real call)
 
 ## Where we are
 
@@ -32,16 +32,19 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - `components/PhotoInput.tsx` — big dashed-border "Add photos" button (hidden native input under a styled label), client-side compression (canvas, 1600px/quality 0.8), max 4, preview + remove.
 - `app/globals.css` — styled pass: color palette (blue/orange), gradient hero banner, light-blue form card with colored top accent and white entry fields, colored focus states, urgency options highlight when selected. Purely visual — no behavior changed.
 - `app/api/enquiry/route.ts` — honeypot → Zod validation → photo count/size validation → dedupe lookup → photo upload (per-file try/catch, never fails the enquiry) → Postgres insert → Slack post (with image blocks) → returns id + photoCount.
-- `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — all wired in.
-- `db/schema.sql` — `enquiries` table incl. `dedupe_hash`.
-- `config/client.ts` — pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types).
+- `app/api/voice-intake/route.ts` — Build 4's general-enquiries webhook: verifies HMAC signature (skips gracefully if `VAPI_WEBHOOK_SECRET` unset) → handles either an `end-of-call-report` (structured data, the live path — no Tool is configured on the assistant) or `tool-calls` message → dedupe → Postgres insert (`source: "call"`, `job_type` defaults to `"other"`, `urgency` derived from an optional timeframe field via keyword heuristic) → Slack post (tagged `Source: Phone call`) → confirmation SMS (stubbed).
+- `lib/vapi.ts` — Vapi payload parsing/field extraction, timeframe→urgency heuristic, HMAC signature verification, assistant-ID sanity check.
+- `lib/sms.ts` — Twilio-shaped confirmation SMS, never-throws pattern; returns `{ ok: false }` cleanly until `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are set.
+- `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — Build 1's modules; Build 4 reuses all of them, `lib/slack.ts` gaining one optional `channel` field (renders as `*Source:*` when present, absent = Build 1's output unchanged).
+- `db/schema.sql` — `enquiries` table incl. `dedupe_hash`. No changes for Build 4 — `source` was already a plain string column.
+- `config/client.ts` — pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types), plus `callbackWindowMinutes`.
 - Docs: `CLAUDE.md`, `README.md`, `DEVLOG.md`, this file, `docs/design/`.
 
 ## What's next
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
-3. **Build 4 (missed call / voicemail AI intake) is now scoped** — see `docs/design/specs/build-4-missed-call-voicemail-intake.md` and `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md`. Blocked on Steven provisioning a Vapi account and phone number (spec §11). `callbackWindowMinutes` has been added to `config/client.ts` and the web form badge now reads from it (done — see devlog); still needed before Build 4 itself can be built: the Vapi assistant's greeting and the confirmation SMS template also need to read this same value once they exist, so all three never drift apart.
+3. **Build 4's general-enquiries voice intake is built, not yet proven against a real call.** `/api/voice-intake` is verified locally against synthetic Vapi payloads (correct DB row, correct Slack card confirmed by Steven, dedupe works, missing-fields case no-ops safely) but nothing has actually reached it from a real phone call yet — see spec §11 for the remaining setup: push this branch live, configure Vapi's Analysis-tab structured data schema and Server URL to point at it, confirm the field/schema key names actually match what `lib/vapi.ts` expects, then place one real test call. SMS confirmation is coded (Twilio) but won't send until credentials are added — check first whether Vapi's calling number is already Twilio-backed and SMS-capable before provisioning a separate sender number.
 
 ## Open questions (not blockers, tracked from the spec §12)
 
@@ -59,4 +62,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - DB driver: `@neondatabase/serverless`, not `pg`.
 - Form design: functionality-first was the initial call; a real visual styling pass has since landed (color palette, gradient hero, light-blue card) per Steven's request.
 - `/api/enquiry` accepts multipart/form-data, not JSON, as of Step 9.
-- Build 4 (missed call/voicemail AI intake): use Vapi short-term to ship quickly, build the Twilio-based self-hosted equivalent independently in parallel for long-term ownership. Full rationale in the decision doc linked above.
+- Build 4 (missed call/voicemail AI intake): use Vapi short-term to ship quickly, build the Twilio-based self-hosted equivalent independently in parallel for long-term ownership. Full rationale in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-build.md`.
+- Build 4's routing model evolved from the original three-way split into three Vapi-side routes Steven is building directly: General enquiries (this repo's `/api/voice-intake`), Business/existing-customer queries, and Emergency calls (similar but immediate logic, separate route) — the latter two aren't part of this repo's build.
+- `source: "call"` (not the `missed_call_ai_intake` this repo's spec originally proposed) — Steven's explicit instruction.
+- Vapi's Private API Key isn't needed anywhere in this repo — the webhook route only ever receives from Vapi, never calls out to it. Not stored anywhere.
