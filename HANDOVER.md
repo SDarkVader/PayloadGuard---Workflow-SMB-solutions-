@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake built, DB/Slack/SMS all individually verified — SMS with a real send to Steven's phone — not yet proven from an actual phone call)
+**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake fully verified in production — DB, Slack, and SMS all confirmed via real production tests — only a genuine phone call remains untested)
 
 ## Where we are
 
@@ -34,7 +34,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - `app/api/enquiry/route.ts` — honeypot → Zod validation → photo count/size validation → dedupe lookup → photo upload (per-file try/catch, never fails the enquiry) → Postgres insert → Slack post (with image blocks) → returns id + photoCount.
 - `app/api/voice-intake/route.ts` — Build 4's general-enquiries webhook: verifies HMAC signature (skips gracefully if `VAPI_WEBHOOK_SECRET` unset) → handles either an `end-of-call-report` (structured data, the live path — no Tool is configured on the assistant) or `tool-calls` message → dedupe → Postgres insert (`source: "call"`, `job_type` defaults to `"other"`, `urgency` derived from an optional timeframe field via keyword heuristic) → Slack post (tagged `Source: Phone call`) → confirmation SMS (stubbed).
 - `lib/vapi.ts` — Vapi payload parsing/field extraction, timeframe→urgency heuristic, HMAC signature verification, assistant-ID sanity check.
-- `lib/sms.ts` — Twilio confirmation SMS, never-throws pattern. **Verified with a real send** to Steven's phone (2026-08-28), confirmed delivered and correctly worded via screenshot. Credentials live in local `.env.local` only — not yet in Vercel's production environment.
+- `lib/sms.ts` — Twilio confirmation SMS, never-throws pattern. **Verified end-to-end in production** (2026-08-28): credentials live in Vercel, a production webhook call resulted in a real delivered text confirmed by Steven. Hit and fixed a real Vercel env var misconfiguration along the way — see devlog.
 - `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — Build 1's modules; Build 4 reuses all of them, `lib/slack.ts` gaining one optional `channel` field (renders as `*Source:*` when present, absent = Build 1's output unchanged).
 - `db/schema.sql` — `enquiries` table incl. `dedupe_hash`. No changes for Build 4 — `source` was already a plain string column.
 - `config/client.ts` — pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types), plus `callbackWindowMinutes`.
@@ -44,10 +44,10 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
-3. **Build 4's general-enquiries voice intake is built and individually verified, not yet proven against a real call.** `/api/voice-intake` is live in production and verified against synthetic Vapi payloads (correct DB row, correct Slack card, dedupe works, missing-fields case no-ops safely); Twilio SMS is verified with a real send. What's left, all on the Vapi/Vercel config side, not code (spec §11):
-   - Add `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER=+447846727576` (and optionally `VAPI_ASSISTANT_ID=15d66cc6-c17b-4af7-84b1-35879faac69c`, `VAPI_WEBHOOK_SECRET`) to Vercel's production environment — currently local-only.
-   - In the Vapi dashboard: an Analysis-tab structured data schema (name/phone/postcode/description) and Server URL set to `https://payload-guard-workflow-smb-solution.vercel.app/api/voice-intake` (given to Steven directly).
-   - One real end-to-end test call once that's wired.
+3. **Build 4's general-enquiries voice intake is fully verified in production — DB, Slack, and SMS all confirmed via real production tests, not synthetic ones.** Server URL is set in Vapi. What's left, entirely on the Vapi config side, not code (spec §11):
+   - **Configure the Analysis-tab structured data schema** in the Vapi dashboard (name/phone/postcode/description) — this is the one missing piece; Server URL alone doesn't make Vapi send anything.
+   - One real end-to-end test call once that's set — ring the number, let it go unanswered, confirm everything lands from an actual call.
+   - Optionally, `VAPI_WEBHOOK_SECRET` for signature verification (currently skipped gracefully since unset).
 
 ## Open questions (not blockers, tracked from the spec §12)
 

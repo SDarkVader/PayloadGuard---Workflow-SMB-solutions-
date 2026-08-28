@@ -17,6 +17,22 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Build 4 fully verified in production; only a real phone call remains
+
+**Phase:** Build 4, general-enquiries branch — closing out production configuration
+
+- Steven wired up the remaining pieces on his end: Server URL set in Vapi's Advanced tab, `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` added to Vercel production env vars, redeployed.
+- Ran a synthetic `end-of-call-report` test against the live production URL (not local) as the real end-to-end check. DB row landed correctly, Slack card posted correctly — but no SMS arrived.
+- Diagnosed via Vercel's runtime logs (`get_runtime_logs`) rather than guessing: `Confirmation SMS failed ...: SMS provider not configured`. Root cause: `TWILIO_FROM_NUMBER` was never added — Steven's summary of what he'd added only listed two of the three required vars.
+- Asked Steven to add it; a screenshot of the "Add Environment Variable" dialog revealed a second, more fundamental problem — the **Key** field contained the actual SID value instead of the variable name `TWILIO_ACCOUNT_SID`. This meant `process.env.TWILIO_ACCOUNT_SID` could never have resolved, which was very likely the true root cause of the original failure (the missing `TWILIO_FROM_NUMBER` may not even have been reached). Walked Steven through deleting the malformed entry and re-adding all three with correct Key/Value pairs.
+- Re-tested against production after the fix and redeploy: no error in the runtime logs, and Steven confirmed both the Slack card and a second SMS arrived correctly.
+- Both production test rows deleted afterward (`before: 1, after: 0` each time).
+- Updated the Build 4 spec's status, §6, and §11 to reflect that DB, Slack, and SMS are now all confirmed working in production — the only remaining gap is Vapi's Analysis-tab structured data schema, which still needs configuring before any real call reaches this webhook at all (Server URL alone isn't sufficient).
+
+**Verified:** full production round-trip — DB write, Slack card, and a real delivered SMS — confirmed via runtime logs and Steven's own screenshots, not assumed. **Not yet done:** the Analysis-tab schema in Vapi, and one real test call.
+
+---
+
 ## 2026-08-28 — Build 4 SMS confirmation verified with a real send
 
 **Phase:** Build 4, general-enquiries branch — closing out the SMS piece
