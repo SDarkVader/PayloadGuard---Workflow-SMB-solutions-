@@ -17,6 +17,21 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Build 4 SMS confirmation verified with a real send
+
+**Phase:** Build 4, general-enquiries branch — closing out the SMS piece
+
+- Steven provided real Twilio credentials (Account SID, Auth Token) and confirmed the number Vapi already calls through (`+447846727576`) as the sender. Verified both independently before wiring anything: the credential pair against Twilio's Account API (200, active account), and the number's SMS capability + ownership against Twilio's IncomingPhoneNumbers API — which also incidentally confirmed that number's `voice_url` already points at Vapi's own inbound-call handler, i.e. it's the live calling number, not a guess.
+- Added the three Twilio env vars plus `VAPI_ASSISTANT_ID` to local `.env.local` (gitignored, not committed) for testing.
+- Steven asked for one real number to text so the send could be verified the same way Slack posts have been throughout this build — by him confirming receipt directly, since neither of us can otherwise observe a delivered SMS. He gave his own number for one test message (used only in an uncommitted local command, not stored in any repo file).
+- Ran the actual shipped `lib/sms.ts` module directly (via Node's native TypeScript support, not a hand-copied re-implementation) rather than pushing the test through the full webhook pipeline — that would have written his personal number into the DB/Slack channel just to test SMS, which wasn't necessary once the module could be isolated and called directly.
+- Real send succeeded (`{ ok: true }`); Steven confirmed via screenshot the text arrived correctly worded, including the config-driven callback-window value ("within 45 minutes," reading `activeClient.callbackWindowMinutes`, not hardcoded).
+- Gave Steven the exact Vapi-side configuration needed to actually route real calls here: the Analysis-tab structured data schema (name/phone/postcode/description) and the live Server URL (`https://payload-guard-workflow-smb-solution.vercel.app/api/voice-intake`, confirmed responding 200 in production).
+
+**Verified:** Twilio credentials and number capability confirmed via Twilio's own API; a real SMS sent through the actual shipped code and confirmed delivered by Steven. **Not yet done:** the three Twilio env vars only exist locally — still need adding to Vercel's production environment before a real call's SMS will send; and nothing on the Vapi side points at this webhook yet.
+
+---
+
 ## 2026-08-28 — Build 4 general-enquiries voice intake built and verified against synthetic payloads
 
 **Phase:** Build 4, general-enquiries branch (spec: `docs/design/specs/build-4-missed-call-voicemail-intake.md`)

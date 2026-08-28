@@ -60,7 +60,11 @@ The 45-minute commitment carries over from the web form for consistency, but per
 
 ## 6. Confirmation SMS
 
-**Coded, not yet sending for real.** `lib/sms.ts` follows the same never-throws pattern as `lib/slack.ts`: `sendConfirmationSms()` checks for `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER`, and if any are missing returns `{ ok: false, error: "SMS provider not configured" }` without affecting the DB write or Slack post — confirmed in the local test (logged, didn't block anything). If those env vars are set, it POSTs to Twilio's Messages API directly (basic auth, no extra dependency). Provider is still Steven's call — worth checking first whether the number Vapi calls through is already Twilio-backed and SMS-capable, so the confirmation can come from the same number the caller rang rather than an unrelated one. Message copy pulls `callbackWindowMinutes` from config (§4), not hardcoded.
+**Built and verified with a real send.** `lib/sms.ts` follows the same never-throws pattern as `lib/slack.ts`: `sendConfirmationSms()` checks for `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER`, returning `{ ok: false, error: "SMS provider not configured" }` cleanly if any are missing. Provider is Twilio, confirmed by Steven — and the number Vapi calls through (`+447846727576`) turned out to already be Twilio-hosted and SMS-capable (confirmed via Twilio's API: `capabilities.sms: true`, and its `voice_url` already points at Vapi's own inbound-call handler), so the confirmation comes from the same number the caller rang, not an unrelated one.
+
+Verified 2026-08-28: credentials validated against Twilio's Account API (200, active), the number's SMS capability confirmed the same way, then the real shipped `lib/sms.ts` module (not a re-implementation — run directly via Node's TS support) sent an actual message to Steven's phone, which he confirmed arrived correctly worded, including the config-driven callback-window value. Message copy pulls `callbackWindowMinutes` from config (§4), not hardcoded.
+
+**Not yet done:** the three Twilio env vars exist only in local `.env.local` (gitignored, used for this test) — they still need adding to Vercel's production environment before a real call's confirmation SMS will actually send.
 
 ## 7. Architecture
 
@@ -127,7 +131,7 @@ Recorded in full in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-
 ## 10. Open questions — not yet resolved, need Steven's input
 
 1. **Business/existing-customer queries and Emergency-call branches.** Steven is building these as separate routes/assistants in Vapi directly, with the emergency branch needing "similar but immediate logic" — not part of this route or this spec's build. Whether they should also write a minimal trace row (this spec's original recommendation) is still open once those branches actually exist.
-2. **SMS provider.** Not yet chosen — see §6. Twilio is coded and ready; needs credentials, or confirmation that Vapi's own number is already Twilio-backed.
+2. ~~SMS provider~~ — resolved: Twilio, confirmed with a real send (§6). No longer open.
 3. **Call recording / transcript retention.** Vapi can typically provide a recording and/or transcript of the call. Steven's note doesn't ask for these to be stored, only for the structured fields extracted from them. Given the "Data handling" stance in the scoping note (customer data beyond what's needed to operate the tool requires specific consent and specific use cases, not default collection), the default here should probably be **don't store the raw recording or full transcript**, only the structured fields — but that's your call to confirm, not mine to assume.
 4. **Processor status / data residency.** Build 1's spec already flagged this as unresolved before Build 2 (§12.1 of that spec): whose infrastructure holds customer data, and under what legal basis. This build makes it sharper — live phone numbers and spoken details flowing through Vapi (a third party) before they ever reach our Postgres. Needs resolving before this goes live with a real client, not before it's prototyped on Steven's own line.
 5. **Real callback-window number.** 45 minutes (now in `config/client.ts` as `callbackWindowMinutes`) is explicitly a placeholder to test against, not validated with CLIENT_ALPHA_CONTACT.
@@ -138,11 +142,12 @@ Recorded in full in `docs/decisions/2026-08-27-voice-orchestration-vapi-vs-self-
 
 1. ~~Confirm repo structure fit~~ — done.
 2. ~~Build `/api/voice-intake`, `lib/vapi.ts`, `lib/sms.ts`, config addition~~ — done, verified against synthetic payloads (§7).
-3. **Configure Vapi to actually call the webhook.** Nothing sends data to `/api/voice-intake` yet — the live assistant has no Server URL pointed at it. Needs, in the Vapi dashboard: an Analysis-tab structured data schema matching name/phone/postcode/description (and timeframe, once that question exists), and a Server URL set to the deployed `/api/voice-intake` URL once this branch is pushed and live on Vercel.
-4. **Confirm the exact field/schema key names** match what `lib/vapi.ts`'s `extractFields()` expects — built against a best guess from the live system prompt, not the actual Analysis-tab schema (which doesn't exist yet).
-5. **A real end-to-end test call** — ring the number, let it go unanswered, confirm the Slack card and DB row land correctly from an actual call rather than a synthetic payload.
-6. Add the timing/urgency question to the assistant's system prompt (Steven's stated next step for the agent itself) and confirm `mapTimeframeToUrgency()`'s keyword heuristic actually fits the real wording once it exists.
-7. SMS provider decision (§6, §10.2).
+3. ~~SMS provider decision~~ — Twilio, confirmed working with a real send to Steven's phone (§6).
+4. **Add the three Twilio env vars to Vercel's production environment** (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER=+447846727576`) — currently local-only, so production can't send SMS yet even though the code path is proven.
+5. **Configure Vapi to actually call the webhook.** Nothing sends data to `/api/voice-intake` yet — the live assistant has no Server URL pointed at it. Given directly to Steven: an Analysis-tab structured data schema matching name/phone/postcode/description, and the Server URL (`https://payload-guard-workflow-smb-solution.vercel.app/api/voice-intake`).
+6. **Confirm the exact field/schema key names** match what `lib/vapi.ts`'s `extractFields()` expects — built against a best guess from the live system prompt, not the actual Analysis-tab schema (which doesn't exist yet).
+7. **A real end-to-end test call** — ring the number, let it go unanswered, confirm the Slack card, DB row, and SMS all land correctly from an actual call rather than synthetic tests.
+8. Add the timing/urgency question to the assistant's system prompt (Steven's stated next step for the agent itself) and confirm `mapTimeframeToUrgency()`'s keyword heuristic actually fits the real wording once it exists.
 
 ## 12. What's out of scope for v1 (from Steven's note)
 

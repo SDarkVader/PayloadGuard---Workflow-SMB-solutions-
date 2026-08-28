@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake built and verified against synthetic payloads, not yet a real call)
+**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake built, DB/Slack/SMS all individually verified — SMS with a real send to Steven's phone — not yet proven from an actual phone call)
 
 ## Where we are
 
@@ -34,7 +34,7 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 - `app/api/enquiry/route.ts` — honeypot → Zod validation → photo count/size validation → dedupe lookup → photo upload (per-file try/catch, never fails the enquiry) → Postgres insert → Slack post (with image blocks) → returns id + photoCount.
 - `app/api/voice-intake/route.ts` — Build 4's general-enquiries webhook: verifies HMAC signature (skips gracefully if `VAPI_WEBHOOK_SECRET` unset) → handles either an `end-of-call-report` (structured data, the live path — no Tool is configured on the assistant) or `tool-calls` message → dedupe → Postgres insert (`source: "call"`, `job_type` defaults to `"other"`, `urgency` derived from an optional timeframe field via keyword heuristic) → Slack post (tagged `Source: Phone call`) → confirmation SMS (stubbed).
 - `lib/vapi.ts` — Vapi payload parsing/field extraction, timeframe→urgency heuristic, HMAC signature verification, assistant-ID sanity check.
-- `lib/sms.ts` — Twilio-shaped confirmation SMS, never-throws pattern; returns `{ ok: false }` cleanly until `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` are set.
+- `lib/sms.ts` — Twilio confirmation SMS, never-throws pattern. **Verified with a real send** to Steven's phone (2026-08-28), confirmed delivered and correctly worded via screenshot. Credentials live in local `.env.local` only — not yet in Vercel's production environment.
 - `lib/schema.ts`, `lib/db.ts`, `lib/dedupe.ts`, `lib/slack.ts`, `lib/blob.ts` — Build 1's modules; Build 4 reuses all of them, `lib/slack.ts` gaining one optional `channel` field (renders as `*Source:*` when present, absent = Build 1's output unchanged).
 - `db/schema.sql` — `enquiries` table incl. `dedupe_hash`. No changes for Build 4 — `source` was already a plain string column.
 - `config/client.ts` — pseudonymized starter config (`CLIENT_ALPHA`, Aberdeen, roofing job types), plus `callbackWindowMinutes`.
@@ -44,12 +44,15 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
-3. **Build 4's general-enquiries voice intake is built, not yet proven against a real call.** `/api/voice-intake` is verified locally against synthetic Vapi payloads (correct DB row, correct Slack card confirmed by Steven, dedupe works, missing-fields case no-ops safely) but nothing has actually reached it from a real phone call yet — see spec §11 for the remaining setup: push this branch live, configure Vapi's Analysis-tab structured data schema and Server URL to point at it, confirm the field/schema key names actually match what `lib/vapi.ts` expects, then place one real test call. SMS confirmation is coded (Twilio) but won't send until credentials are added — check first whether Vapi's calling number is already Twilio-backed and SMS-capable before provisioning a separate sender number.
+3. **Build 4's general-enquiries voice intake is built and individually verified, not yet proven against a real call.** `/api/voice-intake` is live in production and verified against synthetic Vapi payloads (correct DB row, correct Slack card, dedupe works, missing-fields case no-ops safely); Twilio SMS is verified with a real send. What's left, all on the Vapi/Vercel config side, not code (spec §11):
+   - Add `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER=+447846727576` (and optionally `VAPI_ASSISTANT_ID=15d66cc6-c17b-4af7-84b1-35879faac69c`, `VAPI_WEBHOOK_SECRET`) to Vercel's production environment — currently local-only.
+   - In the Vapi dashboard: an Analysis-tab structured data schema (name/phone/postcode/description) and Server URL set to `https://payload-guard-workflow-smb-solution.vercel.app/api/voice-intake` (given to Steven directly).
+   - One real end-to-end test call once that's wired.
 
 ## Open questions (not blockers, tracked from the spec §12)
 
 - Processor status / GDPR posture for photo (and later voice note / call) data — must be settled before Build 2 and before Build 4 goes live with a real client. The photo-URL access-model discussion this session is directly relevant here; Build 4's spec §10.4 sharpens it further (live phone numbers through a third party, Vapi).
-- SMS response-window commitment for Build 2 — needs Steven's honest worst case. Build 4 also needs an SMS provider decision (spec §10.2) and, per Steven, an "already agreed" acknowledgment-text principle from a Build 2 discussion that isn't captured anywhere in this repo yet (spec §10.7) — needs Steven to either restate it or confirm Build 4 should define its own.
+- SMS response-window commitment for Build 2 — needs Steven's honest worst case. Build 4's SMS provider is now resolved (Twilio, verified). Still open, per Steven: an "already agreed" acknowledgment-text principle from a Build 2 discussion that isn't captured anywhere in this repo yet (spec §10.7) — needs Steven to either restate it or confirm Build 4 should define its own.
 - CLIENT_ALPHA's actual call volume / substrate — a conversation with the client, not a build task. Also now needed to size Build 4's actual monthly Vapi cost (~30¢/min all-in, per the decision doc).
 
 ## Decisions made so far
