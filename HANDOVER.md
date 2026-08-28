@@ -2,7 +2,7 @@
 
 Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`, which is append-only history). Read this first to pick the work back up cold.
 
-**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake tested against a real phone call, which surfaced and fixed a genuine architecture gap — Structured Outputs are async, not part of the webhook payload. Fix verified against the real call's data; only `VAPI_API_KEY` in production stands between this and working fully live)
+**Last updated:** 2026-08-28 (Build 1's core loop complete and verified; Build 4's general-enquiries voice intake fully working in production — a real test call surfaced and led to fixing a genuine architecture gap, Structured Outputs are async and not part of the webhook payload, now confirmed working end-to-end against the live deployment)
 
 ## Where we are
 
@@ -44,9 +44,9 @@ Current-state snapshot. This file is overwritten each phase (unlike `DEVLOG.md`,
 
 1. Run the spec's full verification checklist (§10) as a formal pass before calling Build 1 done — most items have already been proven individually across earlier phases (valid submission → Slack + Postgres, missing phone → 400, broken Slack webhook still writes + returns 200, broken DB → 500, duplicate → one row, honeypot → 200 + no write, photo upload → inline Slack image, mobile usability), but it hasn't been run as one deliberate checklist pass against the final, complete build. Includes confirming: a 5th photo is rejected with a clear message, and no secrets are in the repository.
 2. After that: decide with Steven whether Build 1 is ready to redeploy for the first paying client (per `CLAUDE.md`'s deployment order — prove on Steven's own site first, then edit `config/client.ts` and set new env vars).
-3. **Build 4's general-enquiries voice intake: code proven correct against real call data, one env var away from working live.** A real test call surfaced that Vapi's "Structured Outputs" (what the assistant actually uses) are computed asynchronously and never appear in the `end-of-call-report` webhook — they have to be fetched afterward via Vapi's Call API. Fixed in `lib/vapi.ts`/`route.ts`, and the fix verified by feeding that real call's own ID through the updated code locally: correct DB row, correct Slack card (confirmed by Steven after a client-side refresh — it had posted correctly, just no push notification, which is a Slack notification-settings matter, not this code), correct SMS.
-   - **Add `VAPI_API_KEY` to Vercel's production environment** — the only remaining gap. It's not a secret needed for receiving webhooks (as this repo's spec previously assumed) but is needed to poll Structured Outputs after the fact.
-   - Once added and redeployed, place one more real test call to confirm it works fully live, not just against replayed real data.
+3. **Build 4's general-enquiries voice intake is fully working in production.** A real test call surfaced that Vapi's "Structured Outputs" (what the assistant actually uses) are computed asynchronously and never appear in the `end-of-call-report` webhook — they have to be fetched afterward via Vapi's Call API. Fixed in `lib/vapi.ts`/`route.ts`, `VAPI_API_KEY` added to Vercel, and the fix confirmed by replaying the real call's ID against the live production endpoint: correct DB row, correct Slack card, and a delivered SMS, all matching what the local test already showed.
+   - Remaining: a genuinely fresh real call (rather than a replayed one) as final confirmation — everything it depends on is now individually proven, so this is expected to just work.
+   - Add the timing/urgency question to the assistant's system prompt (Steven's own stated next step) once ready, and sanity-check `mapTimeframeToUrgency()`'s heuristic against real wording.
    - Optionally, `VAPI_WEBHOOK_SECRET` for signature verification (currently skipped gracefully since unset).
 
 ## Open questions (not blockers, tracked from the spec §12)

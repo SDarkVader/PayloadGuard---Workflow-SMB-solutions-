@@ -17,6 +17,19 @@ Append-only. Newest entry at the top. Never edit or delete past entries — if s
 
 ---
 
+## 2026-08-28 — Build 4 general-enquiries voice intake confirmed fully working in production
+
+**Phase:** Build 4, general-enquiries branch — closing the loop
+
+- Added `VAPI_API_KEY` to Vercel's production environment (the piece the Structured Outputs fix needed) and redeployed.
+- Rather than wait on a fresh real call, replayed the same real call's ID that surfaced the original bug — this time against the live production endpoint, not locally. Confirmed via the DB directly: correct row (name, phone, postcode, description all matching the original call exactly). Steven confirmed the Slack card and a second delivered SMS via screenshots, both matching.
+- This closes out every individual piece of the general-enquiries branch as proven in production: signature handling, Structured Outputs polling, dedupe, DB write, Slack post, SMS confirmation. What's left is a genuinely fresh real call as final confirmation, which nothing currently unverified stands in the way of.
+- Test row deleted afterward.
+
+**Verified:** full chain confirmed against the live production deployment, not just local testing or replayed synthetic payloads.
+
+---
+
 ## 2026-08-28 — Real test call surfaces and fixes a genuine architecture gap: Structured Outputs are async
 
 **Phase:** Build 4, general-enquiries branch — first real phone call
